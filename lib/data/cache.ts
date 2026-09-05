@@ -13,15 +13,16 @@ export async function readCachedFinancials(ticker: string): Promise<CompanyFinan
     .maybeSingle();
   if (error || !data) return null;
   if (new Date(data.expires_at as string).getTime() < Date.now()) return null;
-  return {
+  const { defaultRates, isUsableFinancials } = await import("./normalize");
+  const financials: CompanyFinancials = {
     quote: data.quote as CompanyFinancials["quote"],
     years: data.statements as CompanyFinancials["years"],
     source: data.source as CompanyFinancials["source"],
     warnings: (data.warnings as string[]) ?? [],
-    defaults: (
-      await import("./normalize")
-    ).defaultRates(ticker),
+    defaults: defaultRates(ticker),
   };
+  if (!isUsableFinancials(financials)) return null;
+  return financials;
 }
 
 export async function writeCachedFinancials(financials: CompanyFinancials): Promise<void> {

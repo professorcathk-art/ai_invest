@@ -1,20 +1,21 @@
 import { deepseek } from "@ai-sdk/deepseek";
 import { streamObject } from "ai";
-import { runEngines, type SliderAssumptions } from "@/lib/engines";
-import type { CompanyFinancials } from "@/lib/engines/types";
+import { runEngines } from "@/lib/engines";
 import { writeAnalysis } from "@/lib/data/cache";
 import { icAnalysisSchema } from "@/lib/llm/schemas";
 import { icSystemPrompt, icUserPrompt } from "@/lib/llm/prompts";
 import { fallbackAnalysis } from "@/lib/llm/personas";
+import { readEnginePayload } from "@/lib/api/request";
 
 export const maxDuration = 60;
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    financials: CompanyFinancials;
-    sliders: SliderAssumptions;
-  };
-  const bundle = runEngines(body.financials, body.sliders);
+  const parsed = await readEnginePayload(request);
+  if ("error" in parsed) {
+    return Response.json({ error: parsed.error }, { status: parsed.status });
+  }
+  const bundle = runEngines(parsed.financials, parsed.sliders);
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
   if (!apiKey) {

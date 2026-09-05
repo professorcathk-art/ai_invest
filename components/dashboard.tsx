@@ -64,11 +64,14 @@ export function Dashboard() {
     const local = fallbackAnalysis(bundle);
     setAnalysis(local);
     setAnalyzing(true);
+    const controller = new AbortController();
+    const abortTimer = window.setTimeout(() => controller.abort(), 55_000);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ financials: payload.financials, sliders }),
+        signal: controller.signal,
       });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("application/json")) {
@@ -87,6 +90,7 @@ export function Dashboard() {
     } catch {
       toast.warning("IC request failed — showing quantitative IC script from the engines.");
     } finally {
+      window.clearTimeout(abortTimer);
       setAnalyzing(false);
     }
   }

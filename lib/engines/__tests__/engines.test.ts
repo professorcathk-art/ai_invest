@@ -5,6 +5,8 @@ import { runDcf } from "../dcf";
 import { runLbo } from "../lbo";
 import { runVc } from "../vc";
 import { runEngines } from "../index";
+import { fallbackAnalysis } from "@/lib/llm/personas";
+import { icAnalysisSchema } from "@/lib/llm/schemas";
 
 function fixture(): CompanyFinancials {
   const years = [2020, 2021, 2022, 2023, 2024].map((year, i) => {
@@ -132,5 +134,14 @@ describe("bundle", () => {
     const bundle = runEngines(fixture(), sliders);
     expect(bundle.personas).toHaveLength(4);
     expect(bundle.personas.every((p) => p.score >= 0 && p.score <= 100)).toBe(true);
+  });
+
+  it("builds a detailed IC memo that matches the persona schema", () => {
+    const bundle = runEngines(fixture(), sliders);
+    const analysis = fallbackAnalysis(bundle);
+    const parsed = icAnalysisSchema.parse(analysis);
+    expect(parsed.narratives).toHaveLength(4);
+    expect(parsed.debate.length).toBeGreaterThanOrEqual(6);
+    expect(parsed.narratives.every((n) => n.argument.length > 200)).toBe(true);
   });
 });

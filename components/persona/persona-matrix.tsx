@@ -63,12 +63,31 @@ export function PersonaMatrix({
                 ))}
               </ul>
               {narrative ? (
-                <div className="space-y-2">
-                  {narrative.thesis.map((line) => (
-                    <p key={line} className="text-muted-foreground text-sm leading-relaxed">
-                      {line}
+                <div className="space-y-3">
+                  <p className="text-sm leading-relaxed">{narrative.argument}</p>
+                  <div>
+                    <div className="text-muted-foreground mb-1 text-[10px] tracking-[0.14em] uppercase">
+                      Valuation
+                    </div>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      {narrative.valuationTake}
                     </p>
-                  ))}
+                  </div>
+                  <ul className="text-muted-foreground list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
+                    {narrative.thesis.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  <div>
+                    <div className="text-muted-foreground mb-1 text-[10px] tracking-[0.14em] uppercase">
+                      Catalysts
+                    </div>
+                    <ul className="text-muted-foreground list-disc space-y-1 pl-4 text-sm">
+                      {narrative.catalysts.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {narrative.risks.map((risk) => (
                       <Badge key={risk} variant="outline" className="text-caution border-caution/40">

@@ -70,19 +70,24 @@ export function metricsBrief(bundle: EngineBundle): string {
 }
 
 export function icSystemPrompt(): string {
-  return `You are the Investment Committee secretary for PersonaVal.
-You MUST:
+  return `You are the Investment Committee secretary for PersonaVal writing a full IC memo, not a tweet.
+
+HARD RULES
 - Use ONLY the provided engine metrics. Never invent or recalculate numbers.
-- Quote specific figures from the JSON (IRR, MoIC, growth, FCF, upside).
-- Write in the voice of each persona:
-  - Buffett: moat, predictability, margin of safety, simple businesses.
-  - Thiel: 10x tech, monopoly, zero-to-one, growth.
-  - PE Partner: cash conversion, debt service, cost-out, multiple expansion.
-  - Dalio: cyclicality, inflation, sovereign/supply-chain, stress tests.
-- Debate must have personas arguing AGAINST each other with those figures.
-- Return strict JSON matching the schema.`;
+- Cite specific figures (IRR, MoIC, DCF price, upside, growth, FCF, leverage) in every section.
+- No one-liners. Each persona argument must be 5–8 sentences.
+- Each thesis bullet is 2–3 sentences.
+- valuationTake is 3–4 sentences on price vs intrinsic value.
+- Debate: 6–8 turns, personas ARGUE against each other with figures. Each turn is 3–5 sentences.
+- chairSummary is 4–6 sentences: majority view, dissent, and what would change the vote.
+
+VOICES
+- Buffett: moat, predictability, margin of safety, simple business, owner earnings.
+- Thiel: 10x tech, monopoly, zero-to-one, network effects, why incremental growth is not enough.
+- PE Partner: cash conversion, debt service at 6.5%, paydown, cost-out, multiple expansion vs contraction, bull/bear IRR.
+- Dalio: cyclicality, inflation/rates, sovereign and supply-chain exposure, stress test of the balance sheet.`;
 }
 
 export function icUserPrompt(bundle: EngineBundle): string {
-  return `Analyze this company for IC using these pre-computed engine outputs:\n\n${metricsBrief(bundle)}`;
+  return `Write a detailed IC memo for this company from the four personas. Do not summarize in a single sentence.\n\n${metricsBrief(bundle)}`;
 }

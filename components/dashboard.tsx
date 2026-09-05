@@ -13,6 +13,7 @@ import { ValuationWorkbench } from "@/components/workbench/valuation-workbench";
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { runEngines } from "@/lib/engines";
+import { fallbackAnalysis } from "@/lib/llm/personas";
 import type { CompanyFinancials, PersonaScorecard, SliderAssumptions } from "@/lib/engines/types";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 
@@ -59,7 +60,9 @@ export function Dashboard() {
   }
 
   async function runIc() {
-    if (!payload || !sliders) return;
+    if (!payload || !sliders || !bundle) return;
+    const local = fallbackAnalysis(bundle);
+    setAnalysis(local);
     setAnalyzing(true);
     try {
       const res = await fetch("/api/analyze", {
@@ -68,38 +71,21 @@ export function Dashboard() {
         body: JSON.stringify({ financials: payload.financials, sliders }),
       });
       const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        const json = await res.json();
-        setAnalysis(json.analysis);
-        if (json.provider === "fallback") {
-          toast.message("DeepSeek key missing — showing quantitative IC script.");
-        }
+      if (!res.ok || !contentType.includes("application/json")) {
+        toast.warning("LLM timed out — showing quantitative IC script from the engines.");
         return;
       }
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No analysis stream");
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const event = JSON.parse(line) as {
-            type: string;
-            data: IcAnalysis;
-            error?: string;
-            provider?: string;
-          };
-          if (event.data) setAnalysis(event.data);
-          if (event.type === "final" && event.error) toast.warning(event.error);
-        }
+      const json = (await res.json()) as {
+        analysis?: IcAnalysis;
+        provider?: string;
+        error?: string;
+      };
+      if (json.analysis) setAnalysis(json.analysis);
+      if (json.provider === "fallback") {
+        toast.message(json.error ?? "Showing quantitative IC script from the engines.");
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "IC analysis failed");
+    } catch {
+      toast.warning("IC request failed — showing quantitative IC script from the engines.");
     } finally {
       setAnalyzing(false);
     }

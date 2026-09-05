@@ -153,6 +153,7 @@ export interface ThresholdCheck {
   actual: number | boolean | null;
   target: string;
   passed: boolean | null;
+  format?: "pct" | "multiple" | "number" | "years";
 }
 
 export interface PersonaScorecard {

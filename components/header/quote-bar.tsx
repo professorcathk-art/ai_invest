@@ -21,12 +21,12 @@ export function QuoteBar({ quote }: { quote: Quote }) {
         </div>
         <div className="text-muted-foreground text-xs">{quote.name}</div>
       </div>
-      <Stat label="Price" value={formatPrice(quote.price)} />
-      <Stat label="Mkt Cap" value={formatCompact(quote.marketCap)} />
-      <Stat label="EV" value={formatCompact(quote.enterpriseValue)} />
-      <Stat label="P/E" value={formatNumber(quote.pe, 1)} />
-      <Stat label="EV/EBITDA" value={formatMultiple(quote.evEbitda)} />
-      <Stat label="Beta" value={formatNumber(quote.beta, 2)} />
+      <Stat label="Price" value={formatPrice(quote.price, quote.currency)} />
+      <Stat label="Mkt Cap" value={formatCompact(quote.marketCap, 1, quote.currency)} />
+      <Stat label="EV" value={formatCompact(quote.enterpriseValue, 1, quote.currency)} />
+      <Stat label="P/E" value={quote.pe ? formatNumber(quote.pe, 1) : "—"} />
+      <Stat label="EV/EBITDA" value={quote.evEbitda ? formatMultiple(quote.evEbitda) : "—"} />
+      <Stat label="Beta" value={quote.beta ? formatNumber(quote.beta, 2) : "—"} />
     </div>
   );
 }

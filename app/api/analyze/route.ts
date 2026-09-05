@@ -1,17 +1,13 @@
-import { deepseek } from "@ai-sdk/deepseek";
-import { generateObject } from "ai";
 import { runEngines } from "@/lib/engines";
 import { writeAnalysis } from "@/lib/data/cache";
-import { icAnalysisSchema } from "@/lib/llm/schemas";
-import { icSystemPrompt, icUserPrompt } from "@/lib/llm/prompts";
-import { fallbackAnalysis } from "@/lib/llm/personas";
+import { fetchCompanyContext } from "@/lib/data/context";
+import { generateDebate, generatePersonaNarrative, PERSONAS } from "@/lib/llm/generate";
 import { readEnginePayload } from "@/lib/api/request";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-/** Leave headroom so Vercel never kills the invocation (plan cap is 60s). */
 const DEEPSEEK_BUDGET_MS = 50_000;
 const PERSIST_BUDGET_MS = 2_000;
 
@@ -37,67 +33,103 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error }, { status: parsed.status });
   }
   const bundle = runEngines(parsed.financials, parsed.sliders);
-  const fallback = fallbackAnalysis(bundle);
 
-  const persist = async (analysis: IcAnalysis, provider: "deepseek" | "fallback") => {
+  const persist = async (analysis: IcAnalysis) => {
     try {
       await withBudget(
         writeAnalysis({
           ticker: bundle.financials.quote.ticker,
           assumptions: bundle.sliders,
           engines: { dcf: bundle.dcf, lbo: bundle.lbo, vc: bundle.vc },
-          personas: { scorecards: bundle.personas, analysis, provider },
+          personas: { scorecards: bundle.personas, analysis, provider: "deepseek" },
         }),
         PERSIST_BUDGET_MS,
         "Supabase persist",
       );
     } catch {
-      // Never fail the IC response because cache write stalled.
+      // Ignore cache failures.
     }
   };
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
-    await persist(fallback, "fallback");
-    return Response.json({
-      analysis: fallback,
-      provider: "fallback",
-      personas: bundle.personas,
-    });
+  if (!process.env.DEEPSEEK_API_KEY) {
+    return Response.json(
+      { error: "DEEPSEEK_API_KEY is not set on the server.", analysis: null },
+      { status: 503 },
+    );
   }
 
-  const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
-  try {
-    const { object } = await withBudget(
-      generateObject({
-        model: deepseek(model),
-        schema: icAnalysisSchema,
-        system: icSystemPrompt(),
-        prompt: icUserPrompt(bundle),
-        maxRetries: 0,
-        maxOutputTokens: 5000,
-        abortSignal: AbortSignal.timeout(DEEPSEEK_BUDGET_MS),
-        providerOptions: {
-          deepseek: {
-            thinking: { type: "disabled" },
-          },
-        },
-      }),
-      DEEPSEEK_BUDGET_MS,
-      "DeepSeek",
-    );
-    await persist(object, "deepseek");
-    return Response.json({
-      analysis: object,
-      provider: "deepseek",
-      personas: bundle.personas,
-    });
-  } catch {
-    await persist(fallback, "fallback");
-    return Response.json({
-      analysis: fallback,
-      provider: "fallback",
-      personas: bundle.personas,
-    });
-  }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (payload: unknown) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      };
+      try {
+        const ctx = await fetchCompanyContext(bundle.financials.quote.ticker);
+        send({ type: "context", context: ctx });
+
+        const results = await withBudget(
+          Promise.allSettled(
+            PERSONAS.map(async (persona) => {
+              const narrative = await generatePersonaNarrative(persona.id, bundle, ctx);
+              send({ type: "persona", narrative });
+              return narrative;
+            }),
+          ),
+          DEEPSEEK_BUDGET_MS,
+          "DeepSeek personas",
+        );
+
+        const narratives = PERSONAS.map((p) => {
+          const hit = results.find(
+            (r) => r.status === "fulfilled" && r.value.id === p.id,
+          );
+          return hit && hit.status === "fulfilled" ? hit.value : null;
+        }).filter((n): n is NonNullable<typeof n> => Boolean(n));
+
+        if (narratives.length < 4) {
+          const reasons = results
+            .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+            .map((r) => (r.reason instanceof Error ? r.reason.message : "failed"));
+          send({
+            type: "error",
+            error: `DeepSeek persona generation failed (${narratives.length}/4). ${reasons[0] ?? ""}`,
+          });
+          return;
+        }
+
+        let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
+        try {
+          debatePart = await generateDebate(narratives, bundle, ctx);
+        } catch {
+          debatePart = {
+            debate: [],
+            chairSummary:
+              "Chair debate timed out after the four persona memos were written. Re-run IC if you need the argument transcript.",
+          };
+        }
+        const analysis = {
+          narratives,
+          debate: debatePart.debate,
+          chairSummary: debatePart.chairSummary,
+        } satisfies IcAnalysis;
+        await persist(analysis);
+        send({ type: "complete", analysis, provider: "deepseek" });
+      } catch (error) {
+        send({
+          type: "error",
+          error: error instanceof Error ? error.message : "DeepSeek IC generation failed",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
 }

@@ -1,18 +1,21 @@
 "use client";
 
-import { Check, Minus, X } from "lucide-react";
+import { Check, Loader2, Minus, Sparkles, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 import type { PersonaScorecard } from "@/lib/engines/types";
-import { formatMultiple, formatPct, voteLabel, voteTone } from "@/lib/format";
+import { formatMultiple, formatNumber, formatPct, voteLabel, voteTone } from "@/lib/format";
 
-function formatActual(value: PersonaScorecard["checks"][number]["actual"]): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+function formatActual(check: PersonaScorecard["checks"][number]): string {
+  const value = check.actual;
   if (value == null) return "—";
-  if (Math.abs(value) <= 2) return formatPct(value);
-  if (Math.abs(value) < 20) return formatMultiple(value);
-  return value.toFixed(1);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (check.format === "years") return `${value} / 5 years`;
+  if (check.format === "number") return formatNumber(value, 1);
+  if (check.format === "multiple") return formatMultiple(value);
+  if (check.format === "pct") return formatPct(value);
+  return formatNumber(value, 1);
 }
 
 function Status({ passed }: { passed: boolean | null }) {
@@ -24,10 +27,29 @@ function Status({ passed }: { passed: boolean | null }) {
 export function PersonaMatrix({
   scorecards,
   analysis,
+  booksReady,
+  analyzing,
 }: {
   scorecards: PersonaScorecard[];
   analysis: IcAnalysis | null;
+  booksReady: boolean;
+  analyzing: boolean;
 }) {
+  if (!analysis && !analyzing) {
+    return (
+      <Card className="bg-card border-border border-dashed">
+        <CardContent className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+          <Sparkles className="text-bull size-6" />
+          <p className="text-lg font-medium">Press Run IC analysis</p>
+          <p className="text-muted-foreground max-w-lg text-sm leading-relaxed">
+            Scores, Pass/Invest labels, and engine checks stay hidden until DeepSeek finishes. We
+            will not show 0, −100%, or empty DCF figures as if they were a result.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {scorecards.map((card) => {
@@ -40,28 +62,38 @@ export function PersonaMatrix({
                   <CardTitle className="text-base">{card.name}</CardTitle>
                   <p className="text-muted-foreground text-xs">{card.assetClass}</p>
                 </div>
-                <div className="text-right">
-                  <div className="font-financial text-xl">{card.score}</div>
-                  <div className={`text-xs font-medium ${voteTone(card.vote)}`}>
-                    {voteLabel(card.vote)}
+                {booksReady && narrative ? (
+                  <div className="text-right">
+                    <div className="font-financial text-xl">{card.score}</div>
+                    <div className={`text-xs font-medium ${voteTone(card.vote)}`}>
+                      {voteLabel(card.vote)}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ul className="space-y-2">
-                {card.checks.map((check) => (
-                  <li key={check.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="flex items-center gap-2">
-                      <Status passed={check.passed} />
-                      {check.label}
-                    </span>
-                    <span className="font-financial text-muted-foreground text-xs">
-                      {formatActual(check.actual)} · {check.target}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {analyzing && !narrative ? (
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                  <Loader2 className="size-4 animate-spin" />
+                  Generating {card.name} memo from DeepSeek…
+                </div>
+              ) : null}
+              {booksReady && narrative ? (
+                <ul className="space-y-2">
+                  {card.checks.map((check) => (
+                    <li key={check.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="flex items-center gap-2">
+                        <Status passed={check.passed} />
+                        {check.label}
+                      </span>
+                      <span className="font-financial text-muted-foreground text-xs">
+                        {formatActual(check)} · {check.target}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {narrative ? (
                 <div className="space-y-3">
                   <p className="text-sm leading-relaxed">{narrative.argument}</p>
@@ -96,11 +128,7 @@ export function PersonaMatrix({
                     ))}
                   </div>
                 </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  Run IC analysis to overlay persona narrative on these engine checks.
-                </p>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         );

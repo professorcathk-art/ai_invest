@@ -161,6 +161,15 @@ export function isUsableFinancials(financials: CompanyFinancials): boolean {
   return complete.length >= 3;
 }
 
+/** True only when engines produced a real price — never treat $0 / −100% as a result. */
+export function isUsableValuation(
+  financials: CompanyFinancials,
+  dcf: { impliedPriceGordon: number; marketPrice: number; enterpriseValueGordon: number },
+): boolean {
+  if (!isUsableFinancials(financials)) return false;
+  return dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 && dcf.enterpriseValueGordon > 0;
+}
+
 export function finalizeCompany(
   source: CompanyFinancials["source"],
   symbol: string,

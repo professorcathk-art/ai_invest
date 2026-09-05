@@ -12,15 +12,19 @@ import { PersonaMatrix } from "@/components/persona/persona-matrix";
 import { ValuationWorkbench } from "@/components/workbench/valuation-workbench";
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
+import { CompanyContextPanel } from "@/components/news/company-context";
 import { runEngines } from "@/lib/engines";
-import { fallbackAnalysis } from "@/lib/llm/personas";
+import { isUsableValuation } from "@/lib/data/normalize";
 import type { CompanyFinancials, PersonaScorecard, SliderAssumptions } from "@/lib/engines/types";
 import type { IcAnalysis } from "@/lib/llm/schemas";
+import type { CompanyContext } from "@/lib/data/context";
 
 interface Payload {
   financials: CompanyFinancials;
   sliders: SliderAssumptions;
   personas: PersonaScorecard[];
+  booksReady: boolean;
+  context: CompanyContext;
 }
 
 export function Dashboard() {
@@ -35,6 +39,10 @@ export function Dashboard() {
     return runEngines(payload.financials, sliders);
   }, [payload, sliders]);
 
+  const valuationReady = Boolean(
+    payload && bundle && isUsableValuation(payload.financials, bundle.dcf),
+  );
+
   async function loadTicker(symbol: string) {
     setLoading(true);
     setAnalysis(null);
@@ -46,6 +54,8 @@ export function Dashboard() {
         financials: json.financials,
         sliders: json.sliders,
         personas: json.personas,
+        booksReady: Boolean(json.booksReady),
+        context: json.context ?? { businessSummary: "", news: [], highlights: [] },
       };
       setPayload(next);
       setSliders(json.sliders);
@@ -61,8 +71,7 @@ export function Dashboard() {
 
   async function runIc() {
     if (!payload || !sliders || !bundle) return;
-    const local = fallbackAnalysis(bundle);
-    setAnalysis(local);
+    setAnalysis(null);
     setAnalyzing(true);
     const controller = new AbortController();
     const abortTimer = window.setTimeout(() => controller.abort(), 55_000);
@@ -73,22 +82,66 @@ export function Dashboard() {
         body: JSON.stringify({ financials: payload.financials, sliders }),
         signal: controller.signal,
       });
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!res.ok || !contentType.includes("application/json")) {
-        toast.warning("LLM timed out — showing quantitative IC script from the engines.");
+      if (!res.ok || !res.body) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(json.error ?? "DeepSeek did not finish. Try again, or set DEEPSEEK_MODEL to deepseek-v4-flash.");
         return;
       }
-      const json = (await res.json()) as {
-        analysis?: IcAnalysis;
-        provider?: string;
-        error?: string;
-      };
-      if (json.analysis) setAnalysis(json.analysis);
-      if (json.provider === "fallback") {
-        toast.message(json.error ?? "Showing quantitative IC script from the engines.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = false;
+      let failed = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as {
+            type?: string;
+            context?: CompanyContext;
+            narrative?: IcAnalysis["narratives"][number];
+            analysis?: IcAnalysis;
+            error?: string;
+          };
+          if (event.type === "context" && event.context) {
+            setPayload((prev) => (prev ? { ...prev, context: event.context! } : prev));
+          }
+          if (event.type === "persona" && event.narrative) {
+            const incoming = event.narrative;
+            setAnalysis((prev) => ({
+              narratives: [
+                ...(prev?.narratives ?? []).filter((n) => n.id !== incoming.id),
+                incoming,
+              ],
+              debate: prev?.debate ?? [],
+              chairSummary: prev?.chairSummary ?? "",
+            }));
+          }
+          if (event.type === "complete" && event.analysis) {
+            setAnalysis(event.analysis);
+            completed = true;
+          }
+          if (event.type === "error") {
+            failed = true;
+            toast.error(
+              event.error ??
+                "DeepSeek did not finish. Try again, or set DEEPSEEK_MODEL to deepseek-v4-flash.",
+            );
+          }
+        }
+        if (done) break;
+      }
+
+      if (!completed && !failed) {
+        toast.error("DeepSeek did not finish. No mock memo was inserted.");
       }
     } catch {
-      toast.warning("IC request failed — showing quantitative IC script from the engines.");
+      toast.error("IC request failed or was aborted. No mock memo was inserted.");
     } finally {
       window.clearTimeout(abortTimer);
       setAnalyzing(false);
@@ -112,15 +165,15 @@ export function Dashboard() {
 
       {loading ? (
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="size-4 animate-spin" /> Fetching statements and running engines…
+          <Loader2 className="size-4 animate-spin" /> Fetching statements and public context…
         </div>
       ) : null}
 
-      {!bundle ? (
+      {!bundle || !payload ? (
         <div className="border-border bg-card flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
           <p className="text-lg font-medium">Load a ticker to open the workbench</p>
           <p className="text-muted-foreground mt-2 max-w-md text-sm">
-            Demo fixtures ship for AAPL, NVDA, and 0700.HK. Add FMP_API_KEY for live coverage.
+            Demo fixtures with full books: AAPL, NVDA, 0700.HK. Other names need FMP_API_KEY for complete statements.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             {["AAPL", "NVDA", "0700.HK"].map((symbol) => (
@@ -133,13 +186,16 @@ export function Dashboard() {
       ) : (
         <>
           <QuoteBar quote={bundle.financials.quote} />
-          <ParamSliders value={bundle.sliders} onChange={setSliders} />
+          <CompanyContextPanel context={payload.context} />
+          {valuationReady ? <ParamSliders value={bundle.sliders} onChange={setSliders} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button onClick={runIc} disabled={analyzing}>
+            <Button onClick={runIc} disabled={analyzing} size="lg">
               {analyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              Run IC analysis
+              {analyzing ? "Generating IC memos…" : "Run IC analysis"}
             </Button>
-            <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
+            {valuationReady ? (
+              <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
+            ) : null}
           </div>
           <Tabs defaultValue="personas">
             <TabsList>
@@ -148,13 +204,30 @@ export function Dashboard() {
               <TabsTrigger value="debate">IC Debate Room</TabsTrigger>
             </TabsList>
             <TabsContent value="personas">
-              <PersonaMatrix scorecards={bundle.personas} analysis={analysis} />
+              <PersonaMatrix
+                scorecards={bundle.personas}
+                analysis={analysis}
+                booksReady={valuationReady}
+                analyzing={analyzing}
+              />
             </TabsContent>
             <TabsContent value="workbench">
-              <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
+              {valuationReady ? (
+                <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
+              ) : (
+                <p className="text-muted-foreground py-10 text-sm">
+                  Valuation tables stay hidden until we have a real DCF. Press Run IC analysis for
+                  persona memos, or add FMP_API_KEY for full statements.
+                </p>
+              )}
             </TabsContent>
             <TabsContent value="debate">
-              <IcDebate scorecards={bundle.personas} analysis={analysis} streaming={analyzing} />
+              <IcDebate
+                scorecards={bundle.personas}
+                analysis={analysis}
+                streaming={analyzing}
+                booksReady={valuationReady}
+              />
             </TabsContent>
           </Tabs>
         </>

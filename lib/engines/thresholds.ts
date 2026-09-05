@@ -9,7 +9,7 @@ import type {
 
 function scoreFromChecks(checks: ThresholdCheck[]): number {
   const known = checks.filter((c) => c.passed !== null);
-  if (known.length === 0) return 50;
+  if (known.length === 0) return 0;
   const hits = known.filter((c) => c.passed).length;
   return Math.round((hits / known.length) * 100);
 }
@@ -32,13 +32,15 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.roic),
       target: "> 15%",
       passed: vc.roic == null ? null : vc.roic > 0.15,
+      format: "pct",
     },
     {
       id: "fcf5",
       label: "Positive FCF (5 yrs)",
-      actual: vc.consecutivePositiveFcf,
+      actual: vc.positiveFcfYears,
       target: "5 / 5 years",
       passed: vc.consecutivePositiveFcf,
+      format: "years",
     },
     {
       id: "de",
@@ -46,13 +48,16 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.debtToEquity),
       target: "< 1.0x",
       passed: vc.debtToEquity == null ? null : vc.debtToEquity < 1,
+      format: "multiple",
     },
     {
       id: "mos",
       label: "Margin of safety (DCF)",
-      actual: num(dcf.upsideGordon),
+      actual: dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 ? num(dcf.upsideGordon) : null,
       target: "> 20% upside",
-      passed: dcf.upsideGordon > 0.2,
+      passed:
+        dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 ? dcf.upsideGordon > 0.2 : null,
+      format: "pct",
     },
   ];
 
@@ -63,6 +68,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.yoyGrowth),
       target: "> 40%",
       passed: vc.yoyGrowth == null ? null : vc.yoyGrowth > 0.4,
+      format: "pct",
     },
     {
       id: "gm",
@@ -70,6 +76,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.grossMargin),
       target: "> 70%",
       passed: vc.grossMargin == null ? null : vc.grossMargin > 0.7,
+      format: "pct",
     },
     {
       id: "rule40",
@@ -77,6 +84,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.ruleOf40),
       target: "> 40",
       passed: vc.ruleOf40 == null ? null : vc.ruleOf40 > 40,
+      format: "number",
     },
   ];
 
@@ -87,6 +95,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.ebitdaMargin),
       target: "> 20%",
       passed: vc.ebitdaMargin == null ? null : vc.ebitdaMargin > 0.2,
+      format: "pct",
     },
     {
       id: "conv",
@@ -94,20 +103,23 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.fcfConversion),
       target: "> 60%",
       passed: vc.fcfConversion == null ? null : vc.fcfConversion > 0.6,
+      format: "pct",
     },
     {
       id: "irr",
       label: "Base IRR > 20%",
-      actual: lbo.base.irr,
+      actual: Number.isFinite(lbo.base.irr) && lbo.base.irr > -0.99 ? lbo.base.irr : null,
       target: "> 20%",
-      passed: lbo.base.irr > 0.2,
+      passed: Number.isFinite(lbo.base.irr) && lbo.base.irr > -0.99 ? lbo.base.irr > 0.2 : null,
+      format: "pct",
     },
     {
       id: "moic",
       label: "Base MoIC > 2.5x",
-      actual: lbo.base.moic,
+      actual: Number.isFinite(lbo.base.moic) && lbo.base.moic > 0 ? lbo.base.moic : null,
       target: "> 2.5x",
-      passed: lbo.base.moic > 2.5,
+      passed: Number.isFinite(lbo.base.moic) && lbo.base.moic > 0 ? lbo.base.moic > 2.5 : null,
+      format: "multiple",
     },
   ];
 
@@ -118,6 +130,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.netDebtToEbitda),
       target: "< 2.0x",
       passed: vc.netDebtToEbitda == null ? null : vc.netDebtToEbitda < 2,
+      format: "multiple",
     },
     {
       id: "cash",
@@ -125,6 +138,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.fcfMargin),
       target: "> 5%",
       passed: vc.fcfMargin == null ? null : vc.fcfMargin > 0.05,
+      format: "pct",
     },
     {
       id: "de2",
@@ -132,6 +146,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
       actual: num(vc.debtToEquity),
       target: "< 1.5x",
       passed: vc.debtToEquity == null ? null : vc.debtToEquity < 1.5,
+      format: "multiple",
     },
   ];
 

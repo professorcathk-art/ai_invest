@@ -83,6 +83,14 @@ export function ValuationWorkbench({
   lbo: LboResult;
   vc: VcResult;
 }) {
+  if (!(dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0)) {
+    return (
+      <p className="text-muted-foreground py-10 text-sm">
+        Valuation tables stay hidden until the DCF produces a real price.
+      </p>
+    );
+  }
+
   const waterfall = [
     { name: "Entry equity", value: lbo.entryEquity / 1e6 },
     { name: "Exit equity", value: lbo.base.exitEquity / 1e6 },

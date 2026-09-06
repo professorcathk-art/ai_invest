@@ -24,7 +24,10 @@ export interface CatalystEvent {
   type: CatalystType;
   date: string | null;
   title: string;
+  detail: string | null;
   impact: CatalystImpact;
+  source: string | null;
+  sourceUrl: string | null;
 }
 
 export interface DividendCatalystPack {
@@ -102,11 +105,11 @@ export function catalystsFromNews(news: NewsItem[], locale: Locale): CatalystEve
     return {
       type: classified.type,
       date: item.publishedAt ? item.publishedAt.slice(0, 10) : null,
-      title:
-        locale === "zh"
-          ? item.title
-          : item.title,
+      title: item.title,
+      detail: locale === "zh" ? item.title : item.title,
       impact: classified.impact,
+      source: item.publisher || null,
+      sourceUrl: item.url || null,
     };
   });
 }
@@ -260,11 +263,17 @@ export function parseCatalystEvent(input: unknown): CatalystEvent | null {
   const impactRaw = String(rec.impact ?? "volatility").toLowerCase();
   const title = String(rec.title ?? "").trim();
   if (!title) return null;
+  const sourceUrl = String(rec.sourceUrl ?? rec.source_url ?? rec.url ?? "").trim();
+  const source = String(rec.source ?? rec.publisher ?? "").trim();
+  const detail = String(rec.detail ?? rec.summary ?? "").trim();
   return {
     type: isCatalystType(typeRaw) ? typeRaw : "other",
     date: dateOnly(rec.date),
     title,
+    detail: detail || null,
     impact: isCatalystImpact(impactRaw) ? impactRaw : "volatility",
+    source: source || null,
+    sourceUrl: sourceUrl || null,
   };
 }
 

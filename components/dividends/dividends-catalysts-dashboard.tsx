@@ -59,6 +59,21 @@ function Timeline({ events }: { events: CatalystEvent[] }) {
               <span className="text-muted-foreground font-financial text-xs">{event.date ?? "—"}</span>
             </div>
             <p className="mt-1.5 text-sm leading-relaxed text-pretty">{event.title}</p>
+            {event.detail && event.detail !== event.title ? (
+              <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">{event.detail}</p>
+            ) : null}
+            {event.source || event.sourceUrl ? (
+              <p className="text-muted-foreground mt-1.5 text-xs">
+                {t("catSource")}{" "}
+                {event.sourceUrl ? (
+                  <a href={event.sourceUrl} target="_blank" rel="noreferrer" className="text-tech hover:underline">
+                    {event.source || event.sourceUrl}
+                  </a>
+                ) : (
+                  event.source
+                )}
+              </p>
+            ) : null}
           </li>
         );
       })}
@@ -131,7 +146,7 @@ export function DividendsCatalystsDashboard({
         <CardHeader>
           <CardTitle className="text-sm">{t("divHistory")}</CardTitle>
         </CardHeader>
-        <CardContent className="h-56">
+        <CardContent className="h-48 sm:h-56">
           {history.length === 0 ? (
             <p className="text-muted-foreground text-sm">—</p>
           ) : (

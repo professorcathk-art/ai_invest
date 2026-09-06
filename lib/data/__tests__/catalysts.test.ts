@@ -46,6 +46,8 @@ describe("dividend and catalyst data", () => {
     expect(rows[0]?.type).toBe("earnings");
     expect(rows[1]?.type).toBe("buyback");
     expect(rows[1]?.impact).toBe("bullish");
+    expect(rows[1]?.source).toBe("Yahoo");
+    expect(rows[1]?.sourceUrl).toBe("https://example.com");
   });
 
   it("does not invent CCASS figures when snapshots are missing", () => {

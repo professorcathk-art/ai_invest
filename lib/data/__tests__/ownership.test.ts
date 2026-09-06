@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  latestNamedFlow,
   marketFromTicker,
+  namedParties,
   parseIngestBody,
   parseOwnershipRecord,
   pctDelta,
@@ -45,5 +47,49 @@ describe("ownership ingest", () => {
     const ordered = sortChronological(parsed);
     expect(ordered[0]?.as_of_date).toBe("2026-03-31");
     expect(pctDelta(67.1, 68.5)).toBeCloseTo(1.4, 8);
+  });
+
+  it("drops generic bucket names and rejects insider signals on HK names", () => {
+    expect(namedParties([{ name: "Insiders", change_30d: "+0.50%" }])).toEqual([]);
+    expect(namedParties([{ name: "CITIBANK N.A.", change_30d: "+1.22%" }])).toHaveLength(1);
+    expect(
+      parseOwnershipRecord({
+        ticker: "0700.HK",
+        as_of_date: "2026-09-06",
+        signal_type: "INSIDER_BULLISH",
+        top_buyers: [{ name: "Insiders", change_30d: "+0.50%" }],
+      }),
+    ).toEqual({ error: expect.stringContaining("insider") });
+    const flow = latestNamedFlow([
+      {
+        ticker: "0700.HK",
+        as_of_date: "2026-09-06",
+        market_type: "HK",
+        institutional_pct: 52,
+        retail_pct: 9,
+        inst_holding_pct: null,
+        insider_holding_pct: null,
+        short_interest_pct: null,
+        net_insider_usd: null,
+        top_buyers: [{ name: "Insiders", change_30d: "+0.50%" }],
+        top_sellers: [{ name: "Retail Brokers", change_30d: "-0.74%" }],
+        signal_type: "NEUTRAL",
+      },
+      {
+        ticker: "0700.HK",
+        as_of_date: "2026-09-04",
+        market_type: "HK",
+        institutional_pct: 71,
+        retail_pct: 1.8,
+        inst_holding_pct: null,
+        insider_holding_pct: null,
+        short_interest_pct: null,
+        net_insider_usd: null,
+        top_buyers: [{ name: "CITIBANK N.A.", change_30d: "+1.22%" }],
+        top_sellers: [{ name: "THE HONGKONG AND SHANGHAI BANKING", change_30d: "-0.70%" }],
+        signal_type: "NEUTRAL",
+      },
+    ]);
+    expect(flow.buyers[0]?.name).toBe("CITIBANK N.A.");
   });
 });

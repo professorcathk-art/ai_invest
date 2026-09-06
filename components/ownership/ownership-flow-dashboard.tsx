@@ -19,6 +19,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import type { SmartMoneyInsight } from "@/lib/llm/schemas";
 import { formatCompact } from "@/lib/format";
 import {
+  latestNamedFlow,
   pctDelta,
   sortChronological,
   type OwnershipParty,
@@ -62,22 +63,22 @@ function signalCopy(
   return { label: t("ownershipSignalNeutral"), tone: "border-border bg-muted/40 text-muted-foreground" };
 }
 
-function PartyTable({ title, rows }: { title: string; rows: OwnershipParty[] }) {
+function PartyTable({ title, rows, empty }: { title: string; rows: OwnershipParty[]; empty: string }) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-x-auto">
         {rows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">—</p>
+          <p className="text-muted-foreground text-sm text-pretty">{empty}</p>
         ) : (
-          <table className="font-financial w-full text-sm">
+          <table className="font-financial w-full min-w-[16rem] text-sm">
             <tbody>
               {rows.slice(0, 5).map((row) => (
-                <tr key={row.name} className="border-border/60 border-b last:border-0">
-                  <td className="py-2 pr-3">{row.name}</td>
-                  <td className="py-2 text-right">{row.change_30d || "—"}</td>
+                <tr key={`${row.name}-${row.change_30d}`} className="border-border/60 border-b last:border-0">
+                  <td className="py-2 pr-3 break-words">{row.name}</td>
+                  <td className="py-2 text-right whitespace-nowrap">{row.change_30d || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -173,6 +174,7 @@ export function OwnershipFlowDashboard({
   const badge = signalCopy(latest.signal_type, market, t);
   const instDelta = pctDelta(snapshots[0]?.institutional_pct ?? null, latest.institutional_pct);
   const retailDelta = pctDelta(snapshots[0]?.retail_pct ?? null, latest.retail_pct);
+  const flow = latestNamedFlow(snapshots);
 
   const hkSummary =
     snapshots.length < 2
@@ -200,7 +202,7 @@ export function OwnershipFlowDashboard({
             <CardHeader>
               <CardTitle className="text-sm">{t("ownershipHkChart")}</CardTitle>
             </CardHeader>
-            <CardContent className="h-64">
+            <CardContent className="h-52 sm:h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={snapshots}>
                   <CartesianGrid stroke="#1f2937" vertical={false} />
@@ -217,8 +219,8 @@ export function OwnershipFlowDashboard({
             </CardContent>
           </Card>
           <div className="grid gap-4 md:grid-cols-2">
-            <PartyTable title={t("ownershipBuyers")} rows={latest.top_buyers} />
-            <PartyTable title={t("ownershipSellers")} rows={latest.top_sellers} />
+            <PartyTable title={t("ownershipBuyers")} rows={flow.buyers} empty={t("ownershipBrokersEmpty")} />
+            <PartyTable title={t("ownershipSellers")} rows={flow.sellers} empty={t("ownershipBrokersEmpty")} />
           </div>
         </>
       ) : (
@@ -236,7 +238,7 @@ export function OwnershipFlowDashboard({
             <CardHeader>
               <CardTitle className="text-sm">{t("ownershipUsChart")}</CardTitle>
             </CardHeader>
-            <CardContent className="h-64">
+            <CardContent className="h-52 sm:h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={snapshots}>
                   <CartesianGrid stroke="#1f2937" vertical={false} />

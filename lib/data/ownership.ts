@@ -45,6 +45,17 @@ function numOrNull(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const GENERIC_PARTY =
+  /^(insiders|retail brokers|index funds|institutions|smart money|custodians)$/i;
+
+export function isGenericParty(name: string): boolean {
+  return GENERIC_PARTY.test(name.trim());
+}
+
+export function namedParties(rows: OwnershipParty[]): OwnershipParty[] {
+  return rows.filter((row) => row.name && !isGenericParty(row.name));
+}
+
 function parties(value: unknown): OwnershipParty[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -52,7 +63,7 @@ function parties(value: unknown): OwnershipParty[] {
       if (!row || typeof row !== "object") return null;
       const rec = row as Record<string, unknown>;
       const name = String(rec.name ?? "").trim();
-      if (!name) return null;
+      if (!name || isGenericParty(name)) return null;
       const change = rec.change_30d ?? rec.change ?? "";
       return { name, change_30d: String(change) };
     })
@@ -81,6 +92,9 @@ export function parseOwnershipRecord(input: unknown): OwnershipSnapshot | { erro
   }
   const marketRaw = String(rec.market_type ?? marketFromTicker(ticker)).toUpperCase();
   const market_type: OwnershipMarket = marketRaw === "US" ? "US" : "HK";
+  if (market_type === "HK" && (signal === "INSIDER_BULLISH" || signal === "INSIDER_SELLING")) {
+    return { error: "HK CCASS snapshots cannot use insider signals." };
+  }
   return {
     ticker,
     as_of_date: asOf,
@@ -117,6 +131,19 @@ export function sortChronological(rows: OwnershipSnapshot[]): OwnershipSnapshot[
   return [...rows].sort((a, b) => a.as_of_date.localeCompare(b.as_of_date));
 }
 
+/** Prefer the newest snapshot that still has real participant names. */
+export function latestNamedFlow(snapshots: OwnershipSnapshot[]): {
+  buyers: OwnershipParty[];
+  sellers: OwnershipParty[];
+} {
+  for (const row of [...sortChronological(snapshots)].reverse()) {
+    const buyers = namedParties(row.top_buyers);
+    const sellers = namedParties(row.top_sellers);
+    if (buyers.length || sellers.length) return { buyers, sellers };
+  }
+  return { buyers: [], sellers: [] };
+}
+
 export function pctDelta(from: number | null, to: number | null): number | null {
   if (from == null || to == null) return null;
   return to - from;
@@ -150,8 +177,8 @@ export function ownershipLlmBrief(snapshots: OwnershipSnapshot[]): string {
         retail_pct: pctDelta(earliest.retail_pct, latest.retail_pct),
         inst_holding_pct: pctDelta(earliest.inst_holding_pct, latest.inst_holding_pct),
       },
-      top_buyers: latest.top_buyers.slice(0, 5),
-      top_sellers: latest.top_sellers.slice(0, 5),
+      top_buyers: namedParties(latest.top_buyers).slice(0, 5),
+      top_sellers: namedParties(latest.top_sellers).slice(0, 5),
     },
     null,
     2,

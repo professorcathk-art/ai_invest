@@ -52,7 +52,13 @@ export async function GET(request: Request) {
             locale === "zh"
               ? `${live.name || ticker} 已排期的業績公布`
               : `${live.name || ticker} scheduled earnings release`,
+          detail:
+            locale === "zh"
+              ? "日期來自 Yahoo Finance 公司行事曆，並非推估。"
+              : "Date taken from the Yahoo Finance company calendar, not estimated.",
           impact: "volatility" as const,
+          source: "Yahoo Finance",
+          sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/calendar`,
         },
         ...catalysts,
       ].slice(0, 5);

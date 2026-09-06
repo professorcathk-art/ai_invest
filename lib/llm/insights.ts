@@ -164,11 +164,14 @@ export async function synthesizeCatalysts(input: {
                 : "other",
           date: item.publishedAt,
           title: item.title,
+          detail: item.title,
           impact: /miss|cut|probe|fine|下滑|盈警/i.test(item.title)
             ? "bearish"
             : /buyback|beat|回購/i.test(item.title)
               ? "bullish"
               : "volatility",
+          source: item.publisher,
+          sourceUrl: item.url,
         }),
       )
       .filter((row): row is CatalystEvent => row != null);
@@ -180,7 +183,13 @@ export async function synthesizeCatalysts(input: {
           input.locale === "zh"
             ? `${input.name || input.ticker} 已排期的業績公布`
             : `${input.name || input.ticker} scheduled earnings release`,
+        detail:
+          input.locale === "zh"
+            ? "日期來自 Yahoo Finance 公司行事曆，並非推估。"
+            : "Date taken from the Yahoo Finance company calendar, not estimated.",
         impact: "volatility",
+        source: "Yahoo Finance",
+        sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(input.ticker)}/calendar`,
       });
     }
     return fromNews.filter((row, i, arr) => arr.findIndex((other) => other.title === row.title) === i).slice(0, 5);
@@ -189,18 +198,22 @@ export async function synthesizeCatalysts(input: {
   if (!process.env.DEEPSEEK_API_KEY) return fromSources();
 
   const headlines = input.news
-    .map((n, i) => `${i + 1}. ${n.title}${n.publishedAt ? ` (${n.publishedAt.slice(0, 10)})` : ""}`)
+    .map(
+      (n, i) =>
+        `${i + 1}. ${n.title} | date=${n.publishedAt?.slice(0, 10) ?? "unknown"} | source=${n.publisher} | url=${n.url}`,
+    )
     .join("\n");
   const text = await complete(
     `You synthesize a 3-5 event catalyst calendar for equity research.
 HARD RULES:
 - Use ONLY supplied headlines, the earnings date, and dividend facts. Do not invent filings, percentages, or dates.
 - If a date is not in the supplied facts, set date to null. If nothing is known, return { "catalysts": [] }.
-- Digest headlines into event titles; never paste a raw headline string unchanged.
+- Keep source and sourceUrl exactly as supplied. Never invent a URL.
+- title: one crisp event line. detail: 1-2 sentences of what the source actually said.
 - type must be earnings|buyback|product|regulatory|other.
 - impact must be bullish|bearish|volatility.
 - ${languageRule(input.locale)}
-Return ONLY JSON: { "catalysts": [{ "type":"earnings","date":"YYYY-MM-DD"|null,"title":"...","impact":"volatility" }] }`,
+Return ONLY JSON: { "catalysts": [{ "type":"earnings","date":"YYYY-MM-DD"|null,"title":"...","detail":"...","impact":"volatility","source":"...","sourceUrl":"..." }] }`,
     `Ticker: ${input.ticker} (${input.name})
 Earnings date: ${input.earningsDate ?? "unknown"}
 Ex-dividend: ${input.dividend.exDividendDate ?? "unknown"}
@@ -208,15 +221,25 @@ Dividend yield: ${input.dividend.yieldPct ?? "unknown"}
 Annual DPS: ${input.dividend.annualDps ?? "unknown"}
 Search headlines:
 ${headlines || "(none)"}`,
-    700,
+    900,
   );
   const rows = extractArray(text);
   const parsed = (Array.isArray(rows) ? rows : [])
     .map(parseCatalystEvent)
     .filter((row): row is CatalystEvent => row != null)
     .slice(0, 5);
+  const allowedUrls = new Set(
+    [
+      ...input.news.map((n) => n.url),
+      `https://finance.yahoo.com/quote/${encodeURIComponent(input.ticker)}/calendar`,
+    ].filter(Boolean),
+  );
   const grounded = parsed
-    .map((row) => (row.date && !allowedDates.has(row.date) ? { ...row, date: null } : row))
+    .map((row) => ({
+      ...row,
+      date: row.date && !allowedDates.has(row.date) ? null : row.date,
+      sourceUrl: row.sourceUrl && !allowedUrls.has(row.sourceUrl) ? null : row.sourceUrl,
+    }))
     .slice(0, 5);
   return grounded.length > 0 ? grounded : fromSources();
 }

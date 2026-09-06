@@ -57,7 +57,7 @@ function Sensitivity({
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <table className="font-financial w-full text-xs">
+        <table className="font-financial w-full min-w-[28rem] text-xs">
           <thead>
             <tr>
               <th className="text-muted-foreground px-2 py-1 text-left">WACC \ </th>

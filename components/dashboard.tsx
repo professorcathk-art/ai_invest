@@ -197,14 +197,14 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 pb-16 md:px-8">
+    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-4 px-3 py-4 pb-20 sm:gap-5 sm:px-4 sm:py-6 md:px-8">
       <ComplianceModal />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-bull text-[11px] tracking-[0.22em] uppercase">{t("brand")}</p>
           {payload ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight">{t("titleShort")}</h1>
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("titleShort")}</h1>
               <p className="text-muted-foreground max-w-2xl text-pretty text-sm">{t("subtitle")}</p>
             </>
           ) : null}
@@ -234,7 +234,7 @@ export function Dashboard() {
           <QuoteBar quote={bundle.financials.quote} />
           <CompanyContextPanel context={payload.context} />
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => setModeOpen(true)} disabled={analyzing} size="lg">
+            <Button onClick={() => setModeOpen(true)} disabled={analyzing} size="lg" className="w-full sm:w-auto">
               {analyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {analyzing ? t("generating") : t("runIc")}
             </Button>
@@ -284,14 +284,26 @@ export function Dashboard() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Tabs defaultValue="personas">
-            <TabsList className="h-auto min-h-8 flex-wrap justify-start">
-              <TabsTrigger value="personas">{t("tabPersonas")}</TabsTrigger>
-              <TabsTrigger value="workbench">{t("tabWorkbench")}</TabsTrigger>
-              <TabsTrigger value="debate">{t("tabDebate")}</TabsTrigger>
-              <TabsTrigger value="ownership">{t("tabOwnership")}</TabsTrigger>
-              <TabsTrigger value="catalysts">{t("tabCatalysts")}</TabsTrigger>
-            </TabsList>
+          <Tabs defaultValue="personas" className="min-w-0">
+            <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:overflow-visible sm:px-0">
+              <TabsList className="bg-muted flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl p-1.5 sm:w-fit sm:flex-wrap">
+                <TabsTrigger value="personas" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                  {t("tabPersonas")}
+                </TabsTrigger>
+                <TabsTrigger value="workbench" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                  {t("tabWorkbench")}
+                </TabsTrigger>
+                <TabsTrigger value="debate" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                  {t("tabDebate")}
+                </TabsTrigger>
+                <TabsTrigger value="ownership" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                  {t("tabOwnership")}
+                </TabsTrigger>
+                <TabsTrigger value="catalysts" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                  {t("tabCatalysts")}
+                </TabsTrigger>
+              </TabsList>
+            </div>
             <TabsContent value="personas">
               <PersonaMatrix
                 scorecards={bundle.personas}

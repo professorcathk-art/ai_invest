@@ -6,7 +6,7 @@ import { useI18n } from "@/components/i18n/provider";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-[7rem]">
+    <div className="min-w-[6.5rem] sm:min-w-[7rem]">
       <div className="text-muted-foreground text-[10px] tracking-[0.14em] uppercase">{label}</div>
       <div className="font-financial text-sm">{value}</div>
     </div>
@@ -16,7 +16,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function QuoteBar({ quote }: { quote: Quote }) {
   const { t } = useI18n();
   return (
-    <div className="border-border bg-card flex flex-wrap items-end gap-6 rounded-xl border px-5 py-3">
+    <div className="border-border bg-card flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl border px-4 py-3 sm:gap-6 sm:px-5">
       <div>
         <div className="font-financial text-bull text-2xl font-semibold tracking-tight">
           {quote.ticker}

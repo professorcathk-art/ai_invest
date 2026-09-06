@@ -30,7 +30,7 @@ export function LandingHero({
   const { t } = useI18n();
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-white/8 bg-linear-to-b from-card via-card to-background px-5 py-12 sm:px-10 sm:py-16">
+    <section className="relative overflow-hidden rounded-2xl border border-white/8 bg-linear-to-b from-card via-card to-background px-4 py-10 sm:rounded-3xl sm:px-10 sm:py-16">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-bull/15 blur-3xl"
@@ -45,7 +45,7 @@ export function LandingHero({
           <Sparkles className="size-3.5" />
           {t("brand")}
         </p>
-        <h1 className="text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">{t("title")}</h1>
+        <h1 className="text-pretty text-2xl font-semibold tracking-tight sm:text-4xl">{t("title")}</h1>
         <p className="text-muted-foreground mt-4 max-w-2xl text-pretty text-sm leading-relaxed sm:text-base">
           {t("subtitle")}
         </p>

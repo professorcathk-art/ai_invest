@@ -18,10 +18,17 @@ export const debateTurnSchema = z.object({
   text: z.string(),
 });
 
+export const smartMoneyInsightSchema = z.object({
+  bullets: z.array(z.string().min(1)).min(3).max(3),
+});
+
 export const icAnalysisSchema = z.object({
   narratives: z.array(personaNarrativeSchema).length(4),
   debate: z.array(debateTurnSchema).min(4).max(4),
   chairSummary: z.string(),
+  smartMoneyInsight: smartMoneyInsightSchema.optional(),
 });
+
+export type SmartMoneyInsight = z.infer<typeof smartMoneyInsightSchema>;
 
 export type IcAnalysis = z.infer<typeof icAnalysisSchema>;

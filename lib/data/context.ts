@@ -25,6 +25,7 @@ export interface CompanyContext {
   news: NewsItem[];
   highlights: CompanyHighlight[];
   references: SourceRef[];
+  ownershipBrief?: string;
 }
 
 export const emptyContext = (): CompanyContext => ({
@@ -375,6 +376,9 @@ export function contextBrief(ctx: CompanyContext): string {
     headlines
       ? `Recent company headlines (digest into business events / market catalysts; do not paste titles verbatim):\n${headlines}`
       : "Recent headlines: none available.",
+    ctx.ownershipBrief
+      ? `Ownership / CCASS / 13F (use these figures only; do not invent holdings):\n${ctx.ownershipBrief}`
+      : "",
     refs ? `Primary public sources (use as background; do not invent filings or paste titles verbatim):\n${refs}` : "",
   ]
     .filter(Boolean)

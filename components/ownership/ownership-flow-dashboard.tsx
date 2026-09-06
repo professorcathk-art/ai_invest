@@ -12,9 +12,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/components/i18n/provider";
 import type { MessageKey } from "@/lib/i18n/messages";
+import type { SmartMoneyInsight } from "@/lib/llm/schemas";
 import { formatCompact } from "@/lib/format";
 import {
   pctDelta,
@@ -86,7 +88,48 @@ function PartyTable({ title, rows }: { title: string; rows: OwnershipParty[] }) 
   );
 }
 
-export function OwnershipFlowDashboard({ ticker }: { ticker: string }) {
+function SmartMoneyBanner({
+  insight,
+  pending,
+}: {
+  insight: SmartMoneyInsight | null;
+  pending: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="border-tech/40 from-tech/15 via-background to-bull/10 relative overflow-hidden rounded-xl border bg-linear-to-br px-4 py-4 shadow-[0_0_24px_rgba(59,130,246,0.18)]">
+      <div className="flex items-start gap-3">
+        <div className="bg-tech/20 text-tech mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full shadow-[0_0_16px_rgba(59,130,246,0.55)]">
+          <Sparkles className={`size-4 ${pending ? "animate-pulse" : ""}`} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-tech text-[11px] tracking-[0.18em] uppercase">{t("smartMoneyTitle")}</div>
+          {insight ? (
+            <ul className="mt-2 space-y-1.5 text-sm leading-relaxed">
+              {insight.bullets.map((bullet) => (
+                <li key={bullet} className="text-pretty">
+                  {bullet}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground mt-2 text-sm">{pending ? t("smartMoneyGenerating") : t("smartMoneyWait")}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OwnershipFlowDashboard({
+  ticker,
+  insight = null,
+  insightPending = false,
+}: {
+  ticker: string;
+  insight?: SmartMoneyInsight | null;
+  insightPending?: boolean;
+}) {
   const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
 
@@ -111,10 +154,20 @@ export function OwnershipFlowDashboard({ ticker }: { ticker: string }) {
   const loading = !payload || payload.ticker !== ticker;
 
   if (loading) {
-    return <p className="text-muted-foreground py-10 text-sm">{t("ownershipLoading")}</p>;
+    return (
+      <div className="space-y-4">
+        <SmartMoneyBanner insight={insight} pending={insightPending} />
+        <p className="text-muted-foreground py-6 text-sm">{t("ownershipLoading")}</p>
+      </div>
+    );
   }
   if (!latest) {
-    return <p className="text-muted-foreground py-10 text-sm">{t("ownershipEmpty")}</p>;
+    return (
+      <div className="space-y-4">
+        <SmartMoneyBanner insight={insight} pending={insightPending} />
+        <p className="text-muted-foreground py-6 text-sm">{t("ownershipEmpty")}</p>
+      </div>
+    );
   }
 
   const badge = signalCopy(latest.signal_type, market, t);
@@ -132,6 +185,7 @@ export function OwnershipFlowDashboard({ ticker }: { ticker: string }) {
 
   return (
     <div className="space-y-4">
+      <SmartMoneyBanner insight={insight} pending={insightPending} />
       <div className={`rounded-lg border px-4 py-3 text-sm ${badge.tone}`}>
         <div className="font-medium">{badge.label}</div>
         <p className="mt-1 text-pretty opacity-90">{market === "HK" ? hkSummary : t("ownershipUsHint")}</p>

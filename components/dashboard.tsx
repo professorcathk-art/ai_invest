@@ -19,6 +19,7 @@ import { ParamSliders } from "@/components/controls/param-sliders";
 import { PersonaMatrix } from "@/components/persona/persona-matrix";
 import { ValuationWorkbench } from "@/components/workbench/valuation-workbench";
 import { OwnershipFlowDashboard } from "@/components/ownership/ownership-flow-dashboard";
+import { DividendsCatalystsDashboard } from "@/components/dividends/dividends-catalysts-dashboard";
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
@@ -50,6 +51,7 @@ export function Dashboard() {
   const [analysis, setAnalysis] = useState<IcAnalysis | null>(null);
   const [modeOpen, setModeOpen] = useState(false);
   const [depthChoice, setDepthChoice] = useState<AnalysisDepth>("concise");
+  const [synthesizeCatalysts, setSynthesizeCatalysts] = useState(false);
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -63,6 +65,7 @@ export function Dashboard() {
   async function loadTicker(symbol: string) {
     setLoading(true);
     setAnalysis(null);
+    setSynthesizeCatalysts(false);
     try {
       const res = await fetch(`/api/ticker/${encodeURIComponent(symbol)}?lang=${locale}`);
       const json = await res.json();
@@ -106,6 +109,7 @@ export function Dashboard() {
     setModeOpen(false);
     setAnalysis(null);
     setAnalyzing(true);
+    setSynthesizeCatalysts(true);
     const controller = new AbortController();
     const abortTimer = window.setTimeout(() => controller.abort(), 58_000);
     try {
@@ -139,10 +143,20 @@ export function Dashboard() {
             context?: CompanyContext;
             narrative?: IcAnalysis["narratives"][number];
             analysis?: IcAnalysis;
+            smartMoneyInsight?: IcAnalysis["smartMoneyInsight"];
             error?: string;
           };
           if (event.type === "context" && event.context) {
             setPayload((prev) => (prev ? { ...prev, context: event.context! } : prev));
+          }
+          if (event.type === "smartMoney" && event.smartMoneyInsight) {
+            const insight = event.smartMoneyInsight;
+            setAnalysis((prev) => ({
+              narratives: prev?.narratives ?? [],
+              debate: prev?.debate ?? [],
+              chairSummary: prev?.chairSummary ?? "",
+              smartMoneyInsight: insight,
+            }));
           }
           if (event.type === "persona" && event.narrative) {
             const incoming = event.narrative;
@@ -153,6 +167,7 @@ export function Dashboard() {
               ],
               debate: prev?.debate ?? [],
               chairSummary: prev?.chairSummary ?? "",
+              smartMoneyInsight: prev?.smartMoneyInsight,
             }));
           }
           if (event.type === "complete" && event.analysis) {
@@ -270,11 +285,12 @@ export function Dashboard() {
             </DialogContent>
           </Dialog>
           <Tabs defaultValue="personas">
-            <TabsList>
+            <TabsList className="h-auto min-h-8 flex-wrap justify-start">
               <TabsTrigger value="personas">{t("tabPersonas")}</TabsTrigger>
               <TabsTrigger value="workbench">{t("tabWorkbench")}</TabsTrigger>
               <TabsTrigger value="debate">{t("tabDebate")}</TabsTrigger>
               <TabsTrigger value="ownership">{t("tabOwnership")}</TabsTrigger>
+              <TabsTrigger value="catalysts">{t("tabCatalysts")}</TabsTrigger>
             </TabsList>
             <TabsContent value="personas">
               <PersonaMatrix
@@ -312,7 +328,17 @@ export function Dashboard() {
               />
             </TabsContent>
             <TabsContent value="ownership">
-              <OwnershipFlowDashboard ticker={bundle.financials.quote.ticker} />
+              <OwnershipFlowDashboard
+                ticker={bundle.financials.quote.ticker}
+                insight={analysis?.smartMoneyInsight ?? null}
+                insightPending={analyzing && !analysis?.smartMoneyInsight}
+              />
+            </TabsContent>
+            <TabsContent value="catalysts">
+              <DividendsCatalystsDashboard
+                ticker={bundle.financials.quote.ticker}
+                synthesize={synthesizeCatalysts}
+              />
             </TabsContent>
           </Tabs>
           {analysis ? <ReferencesPanel context={payload.context} /> : null}

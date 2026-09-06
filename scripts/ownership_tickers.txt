@@ -1,0 +1,61 @@
+# Default weekday ownership watchlist. One ticker per line.
+# Override with OWNERSHIP_TICKERS in .env.local (space-separated).
+
+# Hang Seng / banks / energy / property
+0001.HK
+0002.HK
+0005.HK
+0011.HK
+0016.HK
+0388.HK
+0883.HK
+0939.HK
+0941.HK
+1299.HK
+1398.HK
+2318.HK
+2388.HK
+2628.HK
+3988.HK
+
+# Internet / EV / consumer
+0700.HK
+0981.HK
+1024.HK
+1211.HK
+1810.HK
+2015.HK
+2020.HK
+2269.HK
+3690.HK
+9618.HK
+9633.HK
+9866.HK
+9868.HK
+9888.HK
+9961.HK
+9988.HK
+9992.HK
+9999.HK
+
+# US mega-cap
+AAPL
+AMZN
+AVGO
+AMD
+BRK-B
+COST
+GOOGL
+JPM
+LLY
+MA
+META
+MSFT
+NFLX
+NVDA
+ORCL
+TSLA
+UNH
+V
+WMT
+XOM

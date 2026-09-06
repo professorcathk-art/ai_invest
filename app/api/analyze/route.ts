@@ -1,8 +1,11 @@
 import { runEngines } from "@/lib/engines";
 import { writeAnalysis } from "@/lib/data/cache";
 import { fetchCompanyContext } from "@/lib/data/context";
+import { listOwnership } from "@/lib/data/ownership-store";
+import { ownershipLlmBrief } from "@/lib/data/ownership";
 import { generateDebate, generatePersonaNarrative, PERSONAS } from "@/lib/llm/generate";
 import { fallbackDebate } from "@/lib/llm/debate";
+import { fallbackSmartMoneyInsight, generateSmartMoneyInsight } from "@/lib/llm/insights";
 import { readEnginePayload } from "@/lib/api/request";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 
@@ -67,8 +70,24 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
       };
       try {
-        const ctx = await fetchCompanyContext(bundle.financials.quote.ticker, parsed.locale);
+        const ticker = bundle.financials.quote.ticker;
+        const [ctx, snapshots] = await Promise.all([
+          fetchCompanyContext(ticker, parsed.locale),
+          listOwnership(ticker, 30).catch(() => []),
+        ]);
+        ctx.ownershipBrief = ownershipLlmBrief(snapshots);
         send({ type: "context", context: ctx });
+
+        const insightTask = withBudget(
+          generateSmartMoneyInsight(snapshots, parsed.locale),
+          10_000,
+          "Smart money insight",
+        )
+          .catch(() => fallbackSmartMoneyInsight(snapshots, parsed.locale))
+          .then((insight) => {
+            send({ type: "smartMoney", smartMoneyInsight: insight });
+            return insight;
+          });
 
         const started = Date.now();
         const results = await withBudget(
@@ -100,6 +119,7 @@ export async function POST(request: Request) {
           const reasons = results
             .filter((r): r is PromiseRejectedResult => r.status === "rejected")
             .map((r) => (r.reason instanceof Error ? r.reason.message : "failed"));
+          await insightTask.catch(() => null);
           send({
             type: "error",
             error: `DeepSeek persona generation failed (${narratives.length}/4). ${reasons[0] ?? ""}`,
@@ -124,10 +144,12 @@ export async function POST(request: Request) {
         } catch {
           debatePart = fallbackDebate(narratives, parsed.locale);
         }
+        const smartMoneyInsight = await insightTask;
         const analysis = {
           narratives,
           debate: debatePart.debate,
           chairSummary: debatePart.chairSummary,
+          smartMoneyInsight,
         } satisfies IcAnalysis;
         await persist(analysis);
         send({ type: "complete", analysis, provider: "deepseek" });

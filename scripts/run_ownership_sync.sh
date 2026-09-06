@@ -22,11 +22,25 @@ if [[ -z "${INVESTMOUSE_API_URL:-}" ]]; then
 fi
 
 PYTHON="${INVESTMOUSE_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.9/bin/python3}"
-TICKERS="${OWNERSHIP_TICKERS:-9988.HK 0700.HK NVDA AAPL}"
+LIST_FILE="$ROOT/scripts/ownership_tickers.txt"
 export PYTHONPATH="$ROOT/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
+tickers=()
+if [[ -n "${OWNERSHIP_TICKERS:-}" ]]; then
+  tickers=(${=OWNERSHIP_TICKERS})
+elif [[ -f "$LIST_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    ticker="${line%%#*}"
+    ticker="${ticker//[[:space:]]/}"
+    [[ -n "$ticker" ]] && tickers+=("$ticker")
+  done < "$LIST_FILE"
+else
+  tickers=(9988.HK 0700.HK NVDA AAPL)
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Syncing ${#tickers[@]} tickers"
 status=0
-for ticker in ${=TICKERS}; do
+for ticker in "${tickers[@]}"; do
   "$PYTHON" "$ROOT/scripts/sync_ccass.py" "$ticker" || status=1
 done
 exit "$status"

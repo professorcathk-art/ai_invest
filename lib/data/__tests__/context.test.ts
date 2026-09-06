@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { isTickerRelatedHeadline } from "../context";
+import { contextBrief, isTickerRelatedHeadline } from "../context";
 import { assembleYears, mergeRawYears, reportingCurrency } from "../normalize";
 import { formatMoney, heatBand } from "@/lib/format";
+
+describe("context brief", () => {
+  it("passes CCASS facts into the LLM brief without inventing them", () => {
+    const brief = contextBrief({
+      businessSummary: "Cloud and commerce.",
+      news: [],
+      highlights: [],
+      references: [],
+      ownershipBrief: "institutional_pct: 70.33",
+    });
+    expect(brief).toContain("institutional_pct: 70.33");
+    expect(brief).toContain("Ownership / CCASS");
+  });
+});
 
 describe("headline relevance", () => {
   it("keeps Bank of China headlines and drops unrelated market color", () => {

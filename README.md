@@ -27,6 +27,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | `https://uggnftvqtqiilxapysnt.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | JWT starting `eyJ…` role `anon` (not only `sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | JWT starting `eyJ…` role `service_role` |
+| `RESEARCH_INGEST_TOKEN` | Optional | Bearer token for `POST /api/ownership/ingest` (iMac CCASS script / agents) |
 
 Hobby functions hard-timeout at **60 seconds**. IC uses four parallel DeepSeek calls plus a chair, then returns.
 
@@ -36,7 +37,9 @@ Investor writing style lives in `lib/llm/lenses.ts` — edit that file to change
 
 Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/...&s=TICKER`), not from Yahoo’s generic search feed (that feed is why older builds showed unrelated stories). Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
 
-Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache and analysis snapshots. No extra Supabase settings beyond that.
+Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
+
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Push rows from an iMac with `scripts/sync_ccass.py` (Bearer `RESEARCH_INGEST_TOKEN`).
 
 ## Scripts
 

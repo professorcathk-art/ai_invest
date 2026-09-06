@@ -1,0 +1,123 @@
+import { isHkTicker, normalizeSymbol } from "./normalize";
+
+export const OWNERSHIP_SIGNALS = [
+  "INSTITUTIONAL_ACCUMULATION",
+  "RETAIL_TRAP",
+  "INSIDER_BULLISH",
+  "INSIDER_SELLING",
+  "NEUTRAL",
+] as const;
+
+export type OwnershipSignal = (typeof OWNERSHIP_SIGNALS)[number];
+export type OwnershipMarket = "HK" | "US";
+
+export interface OwnershipParty {
+  name: string;
+  change_30d: string;
+}
+
+export interface OwnershipSnapshot {
+  ticker: string;
+  as_of_date: string;
+  market_type: OwnershipMarket;
+  institutional_pct: number | null;
+  retail_pct: number | null;
+  inst_holding_pct: number | null;
+  insider_holding_pct: number | null;
+  short_interest_pct: number | null;
+  net_insider_usd: number | null;
+  top_buyers: OwnershipParty[];
+  top_sellers: OwnershipParty[];
+  signal_type: OwnershipSignal;
+}
+
+export function marketFromTicker(ticker: string): OwnershipMarket {
+  return isHkTicker(ticker) ? "HK" : "US";
+}
+
+export function isOwnershipSignal(value: string): value is OwnershipSignal {
+  return (OWNERSHIP_SIGNALS as readonly string[]).includes(value);
+}
+
+function numOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parties(value: unknown): OwnershipParty[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const rec = row as Record<string, unknown>;
+      const name = String(rec.name ?? "").trim();
+      if (!name) return null;
+      const change = rec.change_30d ?? rec.change ?? "";
+      return { name, change_30d: String(change) };
+    })
+    .filter((row): row is OwnershipParty => row != null)
+    .slice(0, 10);
+}
+
+function dateOnly(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+export function parseOwnershipRecord(input: unknown): OwnershipSnapshot | { error: string } {
+  if (!input || typeof input !== "object") return { error: "Record must be an object." };
+  const rec = input as Record<string, unknown>;
+  const ticker = normalizeSymbol(String(rec.ticker ?? ""));
+  if (!ticker) return { error: "ticker is required." };
+  const asOf = dateOnly(rec.as_of_date);
+  if (!asOf) return { error: "as_of_date must be YYYY-MM-DD." };
+  const signal = String(rec.signal_type ?? "").trim().toUpperCase();
+  if (!isOwnershipSignal(signal)) {
+    return { error: `signal_type must be one of ${OWNERSHIP_SIGNALS.join(", ")}.` };
+  }
+  const marketRaw = String(rec.market_type ?? marketFromTicker(ticker)).toUpperCase();
+  const market_type: OwnershipMarket = marketRaw === "US" ? "US" : "HK";
+  return {
+    ticker,
+    as_of_date: asOf,
+    market_type,
+    institutional_pct: numOrNull(rec.institutional_pct),
+    retail_pct: numOrNull(rec.retail_pct),
+    inst_holding_pct: numOrNull(rec.inst_holding_pct),
+    insider_holding_pct: numOrNull(rec.insider_holding_pct),
+    short_interest_pct: numOrNull(rec.short_interest_pct),
+    net_insider_usd: numOrNull(rec.net_insider_usd),
+    top_buyers: parties(rec.top_buyers),
+    top_sellers: parties(rec.top_sellers),
+    signal_type: signal,
+  };
+}
+
+export function parseIngestBody(input: unknown): OwnershipSnapshot[] | { error: string } {
+  const rows = Array.isArray(input)
+    ? input
+    : input && typeof input === "object" && Array.isArray((input as { records?: unknown }).records)
+      ? (input as { records: unknown[] }).records
+      : [input];
+  const out: OwnershipSnapshot[] = [];
+  for (const row of rows) {
+    const parsed = parseOwnershipRecord(row);
+    if ("error" in parsed) return parsed;
+    out.push(parsed);
+  }
+  if (out.length === 0) return { error: "No records to ingest." };
+  return out;
+}
+
+export function sortChronological(rows: OwnershipSnapshot[]): OwnershipSnapshot[] {
+  return [...rows].sort((a, b) => a.as_of_date.localeCompare(b.as_of_date));
+}
+
+export function pctDelta(from: number | null, to: number | null): number | null {
+  if (from == null || to == null) return null;
+  return to - from;
+}

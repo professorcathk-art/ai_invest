@@ -18,6 +18,7 @@ import { QuoteBar } from "@/components/header/quote-bar";
 import { ParamSliders } from "@/components/controls/param-sliders";
 import { PersonaMatrix } from "@/components/persona/persona-matrix";
 import { ValuationWorkbench } from "@/components/workbench/valuation-workbench";
+import { OwnershipFlowDashboard } from "@/components/ownership/ownership-flow-dashboard";
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
@@ -273,6 +274,7 @@ export function Dashboard() {
               <TabsTrigger value="personas">{t("tabPersonas")}</TabsTrigger>
               <TabsTrigger value="workbench">{t("tabWorkbench")}</TabsTrigger>
               <TabsTrigger value="debate">{t("tabDebate")}</TabsTrigger>
+              <TabsTrigger value="ownership">{t("tabOwnership")}</TabsTrigger>
             </TabsList>
             <TabsContent value="personas">
               <PersonaMatrix
@@ -308,6 +310,9 @@ export function Dashboard() {
                 streaming={analyzing}
                 booksReady={valuationReady}
               />
+            </TabsContent>
+            <TabsContent value="ownership">
+              <OwnershipFlowDashboard ticker={bundle.financials.quote.ticker} />
             </TabsContent>
           </Tabs>
           {analysis ? <ReferencesPanel context={payload.context} /> : null}

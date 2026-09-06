@@ -51,7 +51,7 @@ function section(sheet: ExcelJS.Worksheet, cellAddr: string, text: string) {
 export async function buildWorkbook(bundle: EngineBundle): Promise<Buffer> {
   const { financials, sliders, dcf, lbo, vc } = bundle;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "PersonaVal";
+  wb.creator = "InvestMouse";
   wb.created = new Date();
 
   const summary = wb.addWorksheet("Summary");
@@ -218,7 +218,7 @@ export async function buildWorkbook(bundle: EngineBundle): Promise<Buffer> {
   });
 
   // --- Summary ---
-  section(summary, "A1", "PersonaVal Summary");
+  section(summary, "A1", "InvestMouse Summary");
   label(summary.getCell("A3"), "Ticker");
   input(summary.getCell("B3"), financials.quote.ticker);
   label(summary.getCell("A4"), "Company");

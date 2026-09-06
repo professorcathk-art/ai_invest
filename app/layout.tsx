@@ -18,9 +18,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PersonaVal — VC/PE Valuation Engine",
+  title: "InvestMouse | 多維度 VC/PE 智能估值與投委會模擬平台",
   description:
-    "Deterministic DCF, LBO, and VC engines with multi-persona Investment Committee analysis.",
+    "融合硬核財務模型（DCF / LBO / VC Units）與四位傳奇投資人 AI 審查邏輯，透視任何上市企業的真實價值。",
 };
 
 export default function RootLayout({

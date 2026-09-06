@@ -22,8 +22,11 @@ export function QuoteBar({ quote }: { quote: Quote }) {
           {quote.ticker}
         </div>
         <div className="text-muted-foreground text-xs">{quote.name}</div>
+        <div className="text-muted-foreground mt-1 text-[10px] tracking-[0.14em] uppercase">
+          {quote.currency}
+        </div>
       </div>
-      <Stat label={t("price")} value={formatPrice(quote.price, quote.currency)} />
+      <Stat label={`${t("price")} (${quote.currency})`} value={formatPrice(quote.price, quote.currency)} />
       <Stat label={t("mktCap")} value={formatCompact(quote.marketCap, 1, quote.currency)} />
       <Stat label={t("ev")} value={formatCompact(quote.enterpriseValue, 1, quote.currency)} />
       <Stat label={t("pe")} value={quote.pe ? formatNumber(quote.pe, 1) : "—"} />

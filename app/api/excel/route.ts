@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="PersonaVal_${ticker}.xlsx"`,
+      "Content-Disposition": `attachment; filename="InvestMouse_${ticker}.xlsx"`,
     },
   });
 }

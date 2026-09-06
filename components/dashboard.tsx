@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,6 +22,7 @@ import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
 import { LanguageToggle } from "@/components/i18n/language-toggle";
+import { LandingHero } from "@/components/home/landing-hero";
 import { useI18n } from "@/components/i18n/provider";
 import { runEngines } from "@/lib/engines";
 import { isUsableValuation } from "@/lib/data/normalize";
@@ -45,6 +47,7 @@ export function Dashboard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<IcAnalysis | null>(null);
   const [modeOpen, setModeOpen] = useState(false);
+  const [depthChoice, setDepthChoice] = useState<AnalysisDepth>("concise");
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -181,12 +184,22 @@ export function Dashboard() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-bull text-[11px] tracking-[0.22em] uppercase">{t("brand")}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
+          {payload ? (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight">{t("titleShort")}</h1>
+              <p className="text-muted-foreground max-w-2xl text-pretty text-sm">{t("subtitle")}</p>
+            </>
+          ) : null}
         </div>
         <div className="flex flex-col items-stretch gap-3 sm:items-end">
           <LanguageToggle />
-          <TickerSearch onSelect={loadTicker} disabled={loading} />
+          {payload ? (
+            <TickerSearch
+              onSelect={loadTicker}
+              disabled={loading}
+              placeholder={t("searchPlaceholder")}
+            />
+          ) : null}
         </div>
       </header>
 
@@ -197,17 +210,7 @@ export function Dashboard() {
       ) : null}
 
       {!bundle || !payload ? (
-        <div className="border-border bg-card flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
-          <p className="text-lg font-medium">{t("loadTicker")}</p>
-          <p className="text-muted-foreground mt-2 max-w-md text-sm">{t("loadHint")}</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {["AAPL", "NVDA", "0700.HK"].map((symbol) => (
-              <Button key={symbol} variant="outline" onClick={() => loadTicker(symbol)}>
-                {symbol}
-              </Button>
-            ))}
-          </div>
-        </div>
+        <LandingHero onSelect={loadTicker} disabled={loading} />
       ) : (
         <>
           <QuoteBar quote={bundle.financials.quote} />
@@ -218,31 +221,49 @@ export function Dashboard() {
               {analyzing ? t("generating") : t("runIc")}
             </Button>
           </div>
-          <Dialog open={modeOpen} onOpenChange={setModeOpen}>
-            <DialogContent>
+          <Dialog
+            open={modeOpen}
+            onOpenChange={(open) => {
+              setModeOpen(open);
+              if (open) setDepthChoice("concise");
+            }}
+          >
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{t("modeTitle")}</DialogTitle>
-                <DialogDescription>{t("pressRunHint")}</DialogDescription>
+                <DialogDescription className="text-pretty">{t("pressRunHint")}</DialogDescription>
               </DialogHeader>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  variant="outline"
-                  className="h-auto flex-col items-start gap-1 p-4 text-left"
-                  onClick={() => runIc("concise")}
-                >
-                  <span className="font-medium">{t("modeConcise")}</span>
-                  <span className="text-muted-foreground text-xs font-normal">{t("modeConciseHint")}</span>
-                </Button>
-                <Button
-                  className="h-auto flex-col items-start gap-1 p-4 text-left"
-                  onClick={() => runIc("professional")}
-                >
-                  <span className="font-medium">{t("modeProfessional")}</span>
-                  <span className="text-primary-foreground/80 text-xs font-normal">
-                    {t("modeProfessionalHint")}
-                  </span>
-                </Button>
+                {(["concise", "professional"] as const).map((mode) => {
+                  const selected = depthChoice === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setDepthChoice(mode)}
+                      className={`min-h-[7.5rem] h-auto rounded-xl border p-4 text-left whitespace-normal ${
+                        selected
+                          ? "border-bull bg-bull/15 ring-bull/40 ring-2"
+                          : "border-border bg-background hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="font-medium">
+                        {mode === "concise" ? t("modeConcise") : t("modeProfessional")}
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">
+                        {mode === "concise" ? t("modeConciseHint") : t("modeProfessionalHint")}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setModeOpen(false)}>
+                  {t("modeCancel")}
+                </Button>
+                <Button onClick={() => runIc(depthChoice)}>{t("modeConfirm")}</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
           <Tabs defaultValue="personas">
@@ -264,7 +285,12 @@ export function Dashboard() {
                 <div className="space-y-4">
                   <ParamSliders value={sliders} onChange={setSliders} />
                   <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
-                  <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
+                  <ValuationWorkbench
+                    dcf={bundle.dcf}
+                    lbo={bundle.lbo}
+                    vc={bundle.vc}
+                    currency={bundle.financials.quote.currency}
+                  />
                 </div>
               ) : (
                 <p className="text-muted-foreground py-10 text-sm">

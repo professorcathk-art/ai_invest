@@ -1,18 +1,21 @@
 import type { EngineBundle } from "@/lib/engines/types";
-import { formatCompact, formatMultiple, formatPct, formatPrice } from "@/lib/format";
+import { formatMoney, formatMoneyCompact, formatMultiple, formatPct } from "@/lib/format";
 
 export function metricsBrief(bundle: EngineBundle): string {
   const { financials, dcf, lbo, vc, personas, sliders } = bundle;
   const q = financials.quote;
+  const ccy = q.currency || "USD";
   return JSON.stringify(
     {
       company: {
         ticker: q.ticker,
         name: q.name,
         sector: q.sector,
-        price: formatPrice(q.price),
-        marketCap: formatCompact(q.marketCap),
-        ev: formatCompact(q.enterpriseValue),
+        reportingCurrency: ccy,
+        listing: q.ticker.endsWith(".HK") ? "Hong Kong (prices and DCF in HKD, not USD)" : q.exchange,
+        price: formatMoney(q.price, ccy),
+        marketCap: formatMoneyCompact(q.marketCap, ccy),
+        ev: formatMoneyCompact(q.enterpriseValue, ccy),
         pe: q.pe,
         evEbitda: q.evEbitda,
       },
@@ -23,17 +26,19 @@ export function metricsBrief(bundle: EngineBundle): string {
         debtPct: formatPct(sliders.debtPct),
       },
       dcf: {
-        impliedPriceGordon: formatPrice(dcf.impliedPriceGordon),
-        impliedPriceExit: formatPrice(dcf.impliedPriceExit),
+        currency: ccy,
+        impliedPriceGordon: formatMoney(dcf.impliedPriceGordon, ccy),
+        impliedPriceExit: formatMoney(dcf.impliedPriceExit, ccy),
         upsideGordon: formatPct(dcf.upsideGordon),
         upsideExit: formatPct(dcf.upsideExit),
-        evGordon: formatCompact(dcf.enterpriseValueGordon),
-        netDebt: formatCompact(dcf.netDebt),
+        evGordon: formatMoneyCompact(dcf.enterpriseValueGordon, ccy),
+        netDebt: formatMoneyCompact(dcf.netDebt, ccy),
       },
       lbo: {
-        entryEv: formatCompact(lbo.entryEv),
-        entryDebt: formatCompact(lbo.entryDebt),
-        entryEquity: formatCompact(lbo.entryEquity),
+        currency: ccy,
+        entryEv: formatMoneyCompact(lbo.entryEv, ccy),
+        entryDebt: formatMoneyCompact(lbo.entryDebt, ccy),
+        entryEquity: formatMoneyCompact(lbo.entryEquity, ccy),
         baseIrr: formatPct(lbo.base.irr),
         baseMoic: formatMultiple(lbo.base.moic),
         bullIrr: formatPct(lbo.bull.irr),
@@ -70,7 +75,7 @@ export function metricsBrief(bundle: EngineBundle): string {
 }
 
 export function icSystemPrompt(): string {
-  return `You are the Investment Committee secretary for PersonaVal writing a full IC memo, not a tweet.
+  return `You are the Investment Committee secretary for InvestMouse writing a full IC memo, not a tweet.
 
 HARD RULES
 - Use ONLY the provided engine metrics. Never invent or recalculate numbers.

@@ -7,6 +7,7 @@ import {
   type IcAnalysis,
 } from "./schemas";
 import { PERSONA_LENSES } from "./lenses";
+import { debateTurnGuide, votingResults } from "./debate";
 import type { EngineBundle } from "@/lib/engines/types";
 import { contextBrief, type CompanyContext } from "@/lib/data/context";
 import type { AnalysisDepth, Locale } from "@/lib/i18n/messages";
@@ -96,6 +97,9 @@ ${persona.lens}
 
 HARD RULES:
 - Use ONLY the supplied engine JSON and public context. Never invent financial figures, headlines, or filings.
+- SYNTHESIS: argument must weave business model + named headlines + engine figures. Never recap numbers without saying what they mean for the vote.
+- Follow your lens's 3-paragraph structure inside argument (use \\n\\n between paragraphs).
+- CURRENCY: company.reportingCurrency is the only money unit. Quote prices as "HKD 154.50" or "USD 190", never convert, and never write USD / 美元 / $ unless reportingCurrency is USD. Hong Kong listings (.HK) are HKD.
 - ${rule}
 - ${languageRule(locale)}
 - Return ONLY a JSON object with keys: id, vote ("strong_invest"|"conditional_invest"|"pass"), conviction (0-100 integer), thesis (3-5 strings), valuationTake, argument, catalysts (2-4), risks (2-4).
@@ -128,24 +132,37 @@ export async function generateDebate(
   locale: Locale = "en",
   depth: AnalysisDepth = "concise",
 ): Promise<Pick<IcAnalysis, "debate" | "chairSummary">> {
+  const votes = votingResults(narratives);
   const digest = narratives
     .map(
       (n) =>
-        `${n.id.toUpperCase()} vote=${n.vote} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
+        `${n.id.toUpperCase()} vote=${n.vote} verdict=${votes[n.id]} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
     )
     .join("\n\n");
   const length = depth === "professional" ? "Each turn is 4–6 sentences." : "Each turn is 3–4 sentences.";
   const text = await complete(
     `You are the IC secretary recording a LIVE argument, not four speeches.
+VOTING_RESULTS (binding — never invent or flip these votes):
+${JSON.stringify(votes)}
+
+TURN-TAKING LOGIC (mandatory):
+- PASS vs PASS, or INVEST vs CONDITIONAL (same family): the reply MUST AGREE with the prior speaker's PASS/INVEST conclusion. The reply MAY criticize their framework or metrics (e.g. "I agree with Warren's PASS, but I am passing because this lacks a 10x moat, not because of the DCF.").
+- INVEST/CONDITIONAL vs PASS (opposite families): the reply MUST challenge the prior speaker's thesis and vote.
+- NEVER write "I disagree with your decision/vote/conclusion" when both speakers reached the same PASS or INVEST-family verdict.
+- Cross-fire turns 5–8 must follow the same pairing rule against the person they name.
+
 STRUCTURE (mandatory, 6–8 turns):
-1. Buffett opens with his vote and two engine figures.
-2. Thiel replies to Buffett BY NAME, quotes one Buffett claim, and attacks it with a different figure.
-3. PE replies to Thiel BY NAME and quotes Thiel.
+1. Buffett opens with his ${votes.buffett} vote and two engine figures.
+2. Thiel replies to Buffett BY NAME.
+3. PE replies to Thiel BY NAME.
 4. Dalio replies to PE BY NAME.
-5–8. Cross-fire. Every turn must start by naming the previous speaker and the claim being rejected.
-FORBIDDEN: parallel monologues, "I agree with the group", or a turn that does not address someone else.
+5–8. Cross-fire. Every turn names the previous speaker and the claim being answered.
+PAIRINGS:
+${debateTurnGuide(votes)}
+FORBIDDEN: parallel monologues, "I agree with the group", a turn that does not address someone else, or fake disagreement on a shared PASS/INVEST verdict.
+CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD.
 ${length}
-Then a 4–6 sentence chairSummary that states who won, who dissented, and what number would flip the majority.
+Then a 4–6 sentence chairSummary that states who won, who dissented, and what number would flip the majority. The summary must match VOTING_RESULTS.
 ${languageRule(locale)}
 Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
     `Persona memos:\n${digest}\n\nMetrics:\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,

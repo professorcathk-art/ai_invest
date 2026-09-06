@@ -1,9 +1,32 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { messages, type Locale, type MessageKey } from "@/lib/i18n/messages";
 
 const STORAGE_KEY = "personaval-locale";
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function readLocale(): Locale {
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  return saved === "zh" || saved === "en" ? saved : "en";
+}
+
+function writeLocale(next: Locale) {
+  window.localStorage.setItem(STORAGE_KEY, next);
+  document.documentElement.lang = next === "zh" ? "zh-Hant" : "en";
+  emit();
+}
 
 const I18nContext = createContext<{
   locale: Locale;
@@ -12,26 +35,12 @@ const I18nContext = createContext<{
 } | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === "zh" || saved === "en") {
-      setLocaleState(saved);
-      document.documentElement.lang = saved === "zh" ? "zh-Hant" : "en";
-    }
-  }, []);
-
-  const setLocale = (next: Locale) => {
-    setLocaleState(next);
-    window.localStorage.setItem(STORAGE_KEY, next);
-    document.documentElement.lang = next === "zh" ? "zh-Hant" : "en";
-  };
+  const locale = useSyncExternalStore(subscribe, readLocale, () => "en" as const);
 
   const value = useMemo(
     () => ({
       locale,
-      setLocale,
+      setLocale: writeLocale,
       t: (key: MessageKey) => messages[locale][key],
     }),
     [locale],

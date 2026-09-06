@@ -127,6 +127,18 @@ export function assembleYears(raw: RawYear[], taxFallback: number, warnings: str
   });
 }
 
+export function reportingCurrency(symbol: string, raw?: string | null): string {
+  const given = (raw ?? "").trim().toUpperCase();
+  if (given && given !== "USD") return given;
+  const ticker = normalizeSymbol(symbol);
+  if (ticker.endsWith(".HK")) return "HKD";
+  if (ticker.endsWith(".KS") || ticker.endsWith(".KQ")) return "KRW";
+  if (ticker.endsWith(".T")) return "JPY";
+  if (ticker.endsWith(".SS") || ticker.endsWith(".SZ")) return "CNY";
+  if (ticker.endsWith(".L")) return "GBP";
+  return given || "USD";
+}
+
 export function buildQuote(
   symbol: string,
   raw: Partial<Quote> & { companyName?: string; mktCap?: number },
@@ -149,7 +161,7 @@ export function buildQuote(
     evRevenue: raw.evRevenue ?? (last && last.revenue ? enterpriseValue / last.revenue : null),
     beta: num(raw.beta, 1),
     sharesOutstanding: shares,
-    currency: raw.currency ?? "USD",
+    currency: reportingCurrency(symbol, raw.currency),
     sector: raw.sector ?? "",
   };
 }

@@ -39,6 +39,29 @@ export function formatPrice(value: number | null | undefined, code = "USD"): str
   return currency(value, value >= 1000 ? 0 : 2, code);
 }
 
+/** Unambiguous for the LLM: "HKD 154.50", never a bare $ that looks like USD. */
+export function formatMoney(value: number | null | undefined, code = "USD"): string {
+  if (value == null || !Number.isFinite(value) || value === 0) return "—";
+  const iso = moneyCode(code);
+  const digits = Math.abs(value) >= 1000 ? 0 : 2;
+  return `${iso} ${Math.abs(value).toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  })}`;
+}
+
+export function formatMoneyCompact(value: number | null | undefined, code = "USD"): string {
+  if (value == null || !Number.isFinite(value) || value === 0) return "—";
+  const iso = moneyCode(code);
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${iso} ${(abs / 1e12).toFixed(1)}T`;
+  if (abs >= 1e9) return `${sign}${iso} ${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}${iso} ${(abs / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${sign}${iso} ${(abs / 1e3).toFixed(1)}K`;
+  return formatMoney(value, iso);
+}
+
 export function formatPct(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;

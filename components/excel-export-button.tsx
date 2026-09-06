@@ -30,7 +30,7 @@ export function ExcelExportButton({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `PersonaVal_${financials.quote.ticker}.xlsx`;
+      a.download = `InvestMouse_${financials.quote.ticker}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {

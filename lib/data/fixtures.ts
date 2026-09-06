@@ -354,10 +354,10 @@ export const FIXTURES: Record<string, CompanyFinancials> = {
       evRevenue: 4.8,
       beta: 1.12,
       sharesOutstanding: 9_200_000_000,
-      currency: "USD",
+      currency: "HKD",
       sector: "Communication Services",
     },
-    ["HK listing shown in USD-equivalent demo figures."],
+    ["HK listing demo figures are in HKD."],
   ),
 };
 
@@ -365,6 +365,7 @@ export const FIXTURE_SEARCH = [
   { symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ" },
   { symbol: "NVDA", name: "NVIDIA Corporation", exchange: "NASDAQ" },
   { symbol: "0700.HK", name: "Tencent Holdings Ltd", exchange: "HKSE" },
+  { symbol: "9988.HK", name: "Alibaba Group Holding Ltd", exchange: "HKSE" },
   { symbol: "MSFT", name: "Microsoft Corporation", exchange: "NASDAQ" },
   { symbol: "GOOGL", name: "Alphabet Inc.", exchange: "NASDAQ" },
   { symbol: "AMZN", name: "Amazon.com Inc.", exchange: "NASDAQ" },

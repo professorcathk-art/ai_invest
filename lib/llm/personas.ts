@@ -1,5 +1,5 @@
 import type { EngineBundle, Vote } from "@/lib/engines/types";
-import { formatCompact, formatMultiple, formatPct, formatPrice } from "@/lib/format";
+import { formatCompact, formatMoney, formatMultiple, formatPct } from "@/lib/format";
 import type { IcAnalysis } from "./schemas";
 
 const NAMES = {
@@ -13,8 +13,9 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
   const { financials, vc, lbo, dcf, sliders } = bundle;
   const name = financials.quote.name;
   const ticker = financials.quote.ticker;
-  const price = formatPrice(financials.quote.price);
-  const dcfPrice = formatPrice(dcf.impliedPriceGordon);
+  const ccy = financials.quote.currency || "USD";
+  const price = formatMoney(financials.quote.price, ccy);
+  const dcfPrice = formatMoney(dcf.impliedPriceGordon, ccy);
   const upside = formatPct(dcf.upsideGordon);
   const yoy = formatPct(vc.yoyGrowth);
   const gm = formatPct(vc.grossMargin);
@@ -27,7 +28,7 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
   const nd = formatMultiple(vc.netDebtToEbitda);
   const conv = formatPct(vc.fcfConversion);
   const wacc = formatPct(sliders.wacc);
-  const ev = formatCompact(financials.quote.enterpriseValue);
+  const ev = formatCompact(financials.quote.enterpriseValue, 1, ccy);
 
   return {
     narratives: [
@@ -40,7 +41,7 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
           `ROIC prints ${roic}. I want a durable double-digit return on capital and at least five years of positive free cash flow before I treat this as a compounder rather than a trading sardine.`,
           `FCF margin is ${fcfm}. Owner earnings must be predictable; a business that cannot convert accounting profit into cash is not a business I want to own through a recession.`,
         ],
-        valuationTake: `I do not need a 10x story. I need a price that is wrong versus cash. At ${price} versus ${dcfPrice} intrinsic, the discount or premium is ${upside}. If that gap is not a clear margin of safety, I wait. Net debt of ${formatCompact(dcf.netDebt)} is subtracted from enterprise value — I will not pay up for a balance sheet that has already spent tomorrow's cash.`,
+        valuationTake: `I do not need a 10x story. I need a price that is wrong versus cash. At ${price} versus ${dcfPrice} intrinsic, the discount or premium is ${upside}. If that gap is not a clear margin of safety, I wait. Net debt of ${formatCompact(dcf.netDebt, 1, ccy)} is subtracted from enterprise value — I will not pay up for a balance sheet that has already spent tomorrow's cash.`,
         argument: `${ticker} has to pass a simple test: can an intelligent owner understand the product, forecast cash within a reasonable band, and sleep at night with the leverage? The engines show ROIC of ${roic}, FCF margin of ${fcfm}, and ${vc.positiveFcfYears} years of positive free cash flow in the sample. Those are the facts. Growth of ${yoy} is interesting but secondary; I have seen plenty of high-growth companies destroy capital. Debt-to-equity is ${formatMultiple(vc.debtToEquity)}. If the moat is real — switching costs, brand, or a low-cost position — the DCF gap of ${upside} decides the ticket size. If the business is fashionable but not inevitable, I pass regardless of the multiple.`,
         catalysts: [
           "A pullback that widens the DCF discount beyond 20%.",
@@ -76,12 +77,12 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
         vote: bundle.personas.find((p) => p.id === "pe")?.vote ?? "pass",
         conviction: bundle.personas.find((p) => p.id === "pe")?.score ?? 0,
         thesis: [
-          `Entry EV is ${formatCompact(lbo.entryEv)} with ${formatPct(sliders.debtPct)} debt. Base IRR is ${irr} and MoIC is ${moic} versus 20% / 2.5x hurdles.`,
+          `Entry EV is ${formatCompact(lbo.entryEv, 1, ccy)} with ${formatPct(sliders.debtPct)} debt. Base IRR is ${irr} and MoIC is ${moic} versus 20% / 2.5x hurdles.`,
           `FCF conversion of ${conv} is what services a 6.5% coupon and 5% annual principal paydown. If conversion holds, the structure works; if it slips, we are a forced seller.`,
           `Bull IRR is ${bullIrr} and bear is ${bearIrr}. I underwrite the bear before I celebrate the base.`,
         ],
         valuationTake: `We are not buying a narrative; we are buying a cash-flow duration. Exit at ${formatMultiple(sliders.exitMultiple)} on year-5 EBITDA. If entry EV/EBITDA is richer than that exit, we need volume, margin, or debt paydown to manufacture the return. Base MoIC of ${moic} is the only number that matters in the IC book.`,
-        argument: `On a ${formatCompact(lbo.entryEquity)} equity check against ${formatCompact(lbo.entryDebt)} of debt, ${ticker} has to throw off cash every year. EBITDA margin is ${formatPct(vc.ebitdaMargin)}. Conversion is ${conv}. Interest is 6.5% and we amortize 5% of opening principal. That is a boring machine, which is the point. I want cost-out optionality and a path to hold leverage inside 2x by exit. The bear case — 15% less EBITDA — drops IRR to ${bearIrr}. If that bear still clears our cost of equity, we can be aggressive. If it does not, we shrink the check or we walk. Multiple expansion is a wish; paydown and margin are a plan.`,
+        argument: `On a ${formatCompact(lbo.entryEquity, 1, ccy)} equity check against ${formatCompact(lbo.entryDebt, 1, ccy)} of debt, ${ticker} has to throw off cash every year. EBITDA margin is ${formatPct(vc.ebitdaMargin)}. Conversion is ${conv}. Interest is 6.5% and we amortize 5% of opening principal. That is a boring machine, which is the point. I want cost-out optionality and a path to hold leverage inside 2x by exit. The bear case — 15% less EBITDA — drops IRR to ${bearIrr}. If that bear still clears our cost of equity, we can be aggressive. If it does not, we shrink the check or we walk. Multiple expansion is a wish; paydown and margin are a plan.`,
         catalysts: [
           "Cost program that lifts EBITDA margin without starving growth capex.",
           "Faster de-levering if FCF conversion stays above 60%.",
@@ -123,7 +124,7 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
       },
       {
         speaker: "pe",
-        text: `Gentlemen, the model is the model. We put ${formatPct(sliders.debtPct)} debt on ${formatCompact(lbo.entryEv)} of entry EV. Base IRR is ${irr} on ${moic} MoIC. If FCF conversion stays at ${conv}, we can pay 6.5% and amortize. I do not need a monopoly and I do not need a cigar butt. I need cash that shows up on Tuesday.`,
+        text: `Gentlemen, the model is the model. We put ${formatPct(sliders.debtPct)} debt on ${formatCompact(lbo.entryEv, 1, ccy)} of entry EV. Base IRR is ${irr} on ${moic} MoIC. If FCF conversion stays at ${conv}, we can pay 6.5% and amortize. I do not need a monopoly and I do not need a cigar butt. I need cash that shows up on Tuesday.`,
       },
       {
         speaker: "dalio",

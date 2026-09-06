@@ -29,6 +29,7 @@ function Sensitivity({
   matrix,
   market,
   colFormat,
+  currency,
 }: {
   title: string;
   rows: number[];
@@ -36,6 +37,7 @@ function Sensitivity({
   matrix: number[][];
   market: number;
   colFormat: (v: number) => string;
+  currency: string;
 }) {
   return (
     <Card className="bg-card border-border overflow-x-auto">
@@ -61,7 +63,7 @@ function Sensitivity({
                 {matrix[i]?.map((price, j) => (
                   <td key={`${i}-${j}`} className="px-1 py-1">
                     <div className={`rounded px-2 py-1 text-right ${heatColor(price, market)}`}>
-                      {formatPrice(price)}
+                      {formatPrice(price, currency)}
                     </div>
                   </td>
                 ))}
@@ -78,10 +80,12 @@ export function ValuationWorkbench({
   dcf,
   lbo,
   vc,
+  currency = "USD",
 }: {
   dcf: DcfResult;
   lbo: LboResult;
   vc: VcResult;
+  currency?: string;
 }) {
   if (!(dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0)) {
     return (
@@ -101,8 +105,8 @@ export function ValuationWorkbench({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="DCF price (Gordon)" value={formatPrice(dcf.impliedPriceGordon)} hint={formatPct(dcf.upsideGordon)} />
-        <Metric label="DCF price (Exit)" value={formatPrice(dcf.impliedPriceExit)} hint={formatPct(dcf.upsideExit)} />
+        <Metric label="DCF price (Gordon)" value={formatPrice(dcf.impliedPriceGordon, currency)} hint={formatPct(dcf.upsideGordon)} />
+        <Metric label="DCF price (Exit)" value={formatPrice(dcf.impliedPriceExit, currency)} hint={formatPct(dcf.upsideExit)} />
         <Metric label="Base LBO IRR / MoIC" value={formatPct(lbo.base.irr)} hint={formatMultiple(lbo.base.moic)} />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
@@ -113,6 +117,7 @@ export function ValuationWorkbench({
           matrix={dcf.sensitivityWaccGrowth}
           market={dcf.marketPrice}
           colFormat={formatPct}
+          currency={currency}
         />
         <Sensitivity
           title="DCF sensitivity — WACC vs exit multiple"
@@ -121,6 +126,7 @@ export function ValuationWorkbench({
           matrix={dcf.sensitivityWaccExit}
           market={dcf.marketPrice}
           colFormat={formatMultiple}
+          currency={currency}
         />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
@@ -171,8 +177,8 @@ export function ValuationWorkbench({
               <div className="text-muted-foreground mb-2 text-xs tracking-wide uppercase">{s.label}</div>
               <div>IRR {formatPct(s.irr)}</div>
               <div>MoIC {formatMultiple(s.moic)}</div>
-              <div>Exit equity {formatCompact(s.exitEquity)}</div>
-              <div>Ending debt {formatCompact(s.endingDebt)}</div>
+              <div>Exit equity {formatCompact(s.exitEquity, 1, currency)}</div>
+              <div>Ending debt {formatCompact(s.endingDebt, 1, currency)}</div>
             </div>
           ))}
         </CardContent>

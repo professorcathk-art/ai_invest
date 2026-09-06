@@ -120,7 +120,7 @@ export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancia
         pe: Number(quote.trailingPE ?? 0) || null,
         beta: Number(stats?.beta ?? 1),
         sharesOutstanding: Number(stats?.sharesOutstanding ?? last?.shares ?? 0),
-        currency: String(quote.currency ?? "USD"),
+        currency: String(quote.currency ?? priceMod?.currency ?? "USD"),
         sector: "",
       },
       last,

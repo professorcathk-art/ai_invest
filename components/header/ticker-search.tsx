@@ -14,46 +14,61 @@ interface Hit {
 export function TickerSearch({
   onSelect,
   disabled,
+  variant = "default",
+  placeholder = "Search ticker — AAPL, NVDA, 0700.HK",
 }: {
   onSelect: (symbol: string) => void;
   disabled?: boolean;
+  variant?: "default" | "hero";
+  placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
+  const q = query.trim();
 
   useEffect(() => {
+    if (!q) return;
     const handle = setTimeout(async () => {
-      const res = await fetch(`/api/ticker/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/ticker/search?q=${encodeURIComponent(q)}`);
       const json = (await res.json()) as { results: Hit[] };
       setHits(json.results ?? []);
-      setOpen(true);
+      setOpen((json.results ?? []).length > 0);
     }, 180);
     return () => clearTimeout(handle);
-  }, [query]);
+  }, [q]);
 
   return (
-    <Popover open={open && hits.length > 0} onOpenChange={setOpen}>
+    <Popover open={Boolean(q) && open && hits.length > 0} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <div className="relative w-full max-w-md">
+        <div className={`relative w-full ${variant === "hero" ? "max-w-2xl" : "max-w-md"}`}>
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
           <Input
             value={query}
             disabled={disabled}
-            placeholder="Search ticker — AAPL, NVDA, 0700.HK"
-            className="bg-card border-border h-11 pl-9 font-mono tracking-wide"
+            placeholder={placeholder}
+            className={`bg-card border-border pl-9 font-mono tracking-wide ${
+              variant === "hero"
+                ? "h-14 rounded-2xl text-base shadow-[0_0_0_1px_rgba(16,185,129,0.25)]"
+                : "h-11"
+            }`}
             onChange={(e) => setQuery(e.target.value.toUpperCase())}
-            onFocus={() => hits.length && setOpen(true)}
+            onFocus={() => {
+              if (q && hits.length) setOpen(true);
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim()) {
-                onSelect(query.trim());
+              if (e.key === "Enter" && q) {
+                onSelect(q);
                 setOpen(false);
               }
             }}
           />
         </div>
       </PopoverAnchor>
-      <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-1" align="start">
+      <PopoverContent
+        className={`${variant === "hero" ? "w-[min(42rem,calc(100vw-2rem))]" : "w-[min(28rem,calc(100vw-2rem))]"} p-1`}
+        align={variant === "hero" ? "center" : "start"}
+      >
         {hits.map((hit) => (
           <button
             key={hit.symbol}

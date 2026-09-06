@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         const results = await withBudget(
           Promise.allSettled(
             PERSONAS.map(async (persona) => {
-              const narrative = await generatePersonaNarrative(persona.id, bundle, ctx);
+              const narrative = await generatePersonaNarrative(persona.id, bundle, ctx, parsed.locale);
               send({ type: "persona", narrative });
               return narrative;
             }),
@@ -100,12 +100,14 @@ export async function POST(request: Request) {
 
         let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
         try {
-          debatePart = await generateDebate(narratives, bundle, ctx);
+          debatePart = await generateDebate(narratives, bundle, ctx, parsed.locale);
         } catch {
           debatePart = {
             debate: [],
             chairSummary:
-              "Chair debate timed out after the four persona memos were written. Re-run IC if you need the argument transcript.",
+              parsed.locale === "zh"
+                ? "四份备忘录已完成，书记辩论超时。如需完整辩论记录，请再运行一次投委会分析。"
+                : "Chair debate timed out after the four persona memos were written. Re-run IC if you need the argument transcript.",
           };
         }
         const analysis = {

@@ -19,6 +19,7 @@ export async function GET(
       businessSummary: "",
       news: [],
       highlights: [],
+      references: [],
     }));
     return NextResponse.json({
       financials,

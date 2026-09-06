@@ -12,7 +12,9 @@ import { PersonaMatrix } from "@/components/persona/persona-matrix";
 import { ValuationWorkbench } from "@/components/workbench/valuation-workbench";
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
-import { CompanyContextPanel } from "@/components/news/company-context";
+import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
+import { LanguageToggle } from "@/components/i18n/language-toggle";
+import { useI18n } from "@/components/i18n/provider";
 import { runEngines } from "@/lib/engines";
 import { isUsableValuation } from "@/lib/data/normalize";
 import type { CompanyFinancials, PersonaScorecard, SliderAssumptions } from "@/lib/engines/types";
@@ -28,6 +30,7 @@ interface Payload {
 }
 
 export function Dashboard() {
+  const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
   const [sliders, setSliders] = useState<SliderAssumptions | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,7 +58,7 @@ export function Dashboard() {
         sliders: json.sliders,
         personas: json.personas,
         booksReady: Boolean(json.booksReady),
-        context: json.context ?? { businessSummary: "", news: [], highlights: [] },
+        context: json.context ?? { businessSummary: "", news: [], highlights: [], references: [] },
       };
       setPayload(next);
       setSliders(json.sliders);
@@ -79,7 +82,7 @@ export function Dashboard() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ financials: payload.financials, sliders }),
+        body: JSON.stringify({ financials: payload.financials, sliders, locale }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -152,29 +155,26 @@ export function Dashboard() {
     <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 md:px-8">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-bull text-[11px] tracking-[0.22em] uppercase">PersonaVal</p>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Multi-Persona VC/PE Valuation Engine
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Deterministic DCF · LBO · VC engines. LLM interprets, never calculates.
-          </p>
+          <p className="text-bull text-[11px] tracking-[0.22em] uppercase">{t("brand")}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
         </div>
-        <TickerSearch onSelect={loadTicker} disabled={loading} />
+        <div className="flex flex-col items-stretch gap-3 sm:items-end">
+          <LanguageToggle />
+          <TickerSearch onSelect={loadTicker} disabled={loading} />
+        </div>
       </header>
 
       {loading ? (
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="size-4 animate-spin" /> Fetching statements and public context…
+          <Loader2 className="size-4 animate-spin" /> {t("fetching")}
         </div>
       ) : null}
 
       {!bundle || !payload ? (
         <div className="border-border bg-card flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
-          <p className="text-lg font-medium">Load a ticker to open the workbench</p>
-          <p className="text-muted-foreground mt-2 max-w-md text-sm">
-            Demo fixtures with full books: AAPL, NVDA, 0700.HK. Other names need FMP_API_KEY for complete statements.
-          </p>
+          <p className="text-lg font-medium">{t("loadTicker")}</p>
+          <p className="text-muted-foreground mt-2 max-w-md text-sm">{t("loadHint")}</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             {["AAPL", "NVDA", "0700.HK"].map((symbol) => (
               <Button key={symbol} variant="outline" onClick={() => loadTicker(symbol)}>
@@ -191,7 +191,7 @@ export function Dashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Button onClick={runIc} disabled={analyzing} size="lg">
               {analyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {analyzing ? "Generating IC memos…" : "Run IC analysis"}
+              {analyzing ? t("generating") : t("runIc")}
             </Button>
             {valuationReady ? (
               <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
@@ -199,9 +199,9 @@ export function Dashboard() {
           </div>
           <Tabs defaultValue="personas">
             <TabsList>
-              <TabsTrigger value="personas">Persona Matrix</TabsTrigger>
-              <TabsTrigger value="workbench">Valuation Workbench</TabsTrigger>
-              <TabsTrigger value="debate">IC Debate Room</TabsTrigger>
+              <TabsTrigger value="personas">{t("tabPersonas")}</TabsTrigger>
+              <TabsTrigger value="workbench">{t("tabWorkbench")}</TabsTrigger>
+              <TabsTrigger value="debate">{t("tabDebate")}</TabsTrigger>
             </TabsList>
             <TabsContent value="personas">
               <PersonaMatrix
@@ -216,8 +216,7 @@ export function Dashboard() {
                 <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
               ) : (
                 <p className="text-muted-foreground py-10 text-sm">
-                  Valuation tables stay hidden until we have a real DCF. Press Run IC analysis for
-                  persona memos, or add FMP_API_KEY for full statements.
+                  {t("workbenchHidden")}
                 </p>
               )}
             </TabsContent>
@@ -230,6 +229,7 @@ export function Dashboard() {
               />
             </TabsContent>
           </Tabs>
+          {analysis ? <ReferencesPanel context={payload.context} /> : null}
         </>
       )}
     </div>

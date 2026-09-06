@@ -33,6 +33,8 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
     narratives: [
       {
         id: "buffett",
+        vote: bundle.personas.find((p) => p.id === "buffett")?.vote ?? "pass",
+        conviction: bundle.personas.find((p) => p.id === "buffett")?.score ?? 0,
         thesis: [
           `${name} (${ticker}) currently trades at ${price}. The Gordon DCF at a ${wacc} WACC implies ${dcfPrice}, or ${upside} versus the quote — that is the entire margin-of-safety question.`,
           `ROIC prints ${roic}. I want a durable double-digit return on capital and at least five years of positive free cash flow before I treat this as a compounder rather than a trading sardine.`,
@@ -51,6 +53,8 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
       },
       {
         id: "thiel",
+        vote: bundle.personas.find((p) => p.id === "thiel")?.vote ?? "pass",
+        conviction: bundle.personas.find((p) => p.id === "thiel")?.score ?? 0,
         thesis: [
           `YoY growth is ${yoy} against a 40% monopoly bar. Incremental growth is competition; I am looking for a 10x technological gap.`,
           `Gross margin is ${gm}. Software-like or proprietary tech should clear 70%. Anything in the middle is a feature, not a company.`,
@@ -69,6 +73,8 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
       },
       {
         id: "pe",
+        vote: bundle.personas.find((p) => p.id === "pe")?.vote ?? "pass",
+        conviction: bundle.personas.find((p) => p.id === "pe")?.score ?? 0,
         thesis: [
           `Entry EV is ${formatCompact(lbo.entryEv)} with ${formatPct(sliders.debtPct)} debt. Base IRR is ${irr} and MoIC is ${moic} versus 20% / 2.5x hurdles.`,
           `FCF conversion of ${conv} is what services a 6.5% coupon and 5% annual principal paydown. If conversion holds, the structure works; if it slips, we are a forced seller.`,
@@ -87,6 +93,8 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
       },
       {
         id: "dalio",
+        vote: bundle.personas.find((p) => p.id === "dalio")?.vote ?? "pass",
+        conviction: bundle.personas.find((p) => p.id === "dalio")?.score ?? 0,
         thesis: [
           `Net debt / EBITDA is ${nd}. That is the first stress-test gate before I care about IRR or DCF.`,
           `${ticker} sits in ${financials.quote.sector || "its sector"} with an enterprise value of ${ev}. I map it to the cycle: growth, inflation, and tightness of money.`,

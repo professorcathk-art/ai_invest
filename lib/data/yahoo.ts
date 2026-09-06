@@ -10,7 +10,6 @@ import {
 import type { SearchHit } from "./fmp";
 
 function client() {
-  // Lazy import keeps Next edge/build from evaluating the SDK at module load.
   return import("yahoo-finance2").then((mod) => new mod.default({ suppressNotices: ["yahooSurvey"] }));
 }
 
@@ -30,17 +29,28 @@ export async function searchYahoo(query: string): Promise<SearchHit[]> {
   }
 }
 
-type LooseRow = Record<string, unknown> & { endDate?: Date | string };
-
 function n(value: unknown): number {
   const num = typeof value === "number" ? value : Number(value);
   return Number.isFinite(num) ? num : 0;
 }
 
-function pickYear(date: Date | string | undefined): number {
-  if (!date) return 0;
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.getUTCFullYear();
+function seriesNum(row: Record<string, unknown>, ...keys: string[]): number {
+  for (const key of keys) {
+    if (row[key] != null && Number.isFinite(Number(row[key]))) return n(row[key]);
+    const annual = `annual${key[0]?.toUpperCase()}${key.slice(1)}`;
+    if (row[annual] != null && Number.isFinite(Number(row[annual]))) return n(row[annual]);
+  }
+  return 0;
+}
+
+function seriesYear(row: Record<string, unknown>): number {
+  const raw = row.date ?? row.asOfDate ?? row.endDate;
+  if (raw instanceof Date) return raw.getUTCFullYear();
+  if (typeof raw === "string" || typeof raw === "number") {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d.getUTCFullYear();
+  }
+  return 0;
 }
 
 export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancials | null> {
@@ -48,58 +58,49 @@ export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancia
   const warnings: string[] = ["Yahoo Finance fallback — some fields may be incomplete."];
   try {
     const yf = await client();
-    const [quote, summary] = await Promise.all([
+    const period1 = new Date();
+    period1.setUTCFullYear(period1.getUTCFullYear() - 5);
+
+    const [quote, summary, series] = await Promise.all([
       yf.quote(ticker),
       yf.quoteSummary(ticker, {
-        modules: [
-          "price",
-          "summaryDetail",
-          "defaultKeyStatistics",
-          "financialData",
-          "incomeStatementHistory",
-          "balanceSheetHistory",
-          "cashflowStatementHistory",
-        ],
+        modules: ["price", "summaryDetail", "defaultKeyStatistics", "financialData"],
       }),
+      yf
+        .fundamentalsTimeSeries(ticker, {
+          period1: period1.toISOString().slice(0, 10),
+          type: "annual",
+          module: "all",
+        })
+        .catch(() => []),
     ]);
 
-    const income = (summary.incomeStatementHistory?.incomeStatementHistory ?? []) as unknown as LooseRow[];
-    const balances = (summary.balanceSheetHistory?.balanceSheetStatements ?? []) as unknown as LooseRow[];
-    const cashflows = (summary.cashflowStatementHistory?.cashflowStatements ?? []) as unknown as LooseRow[];
-
     const byYear = new Map<number, RawYear>();
-    for (const row of income) {
-      const year = pickYear(row.endDate);
-      byYear.set(year, {
-        year,
-        date: row.endDate ? new Date(row.endDate).toISOString().slice(0, 10) : undefined,
-        revenue: n(row.totalRevenue),
-        grossProfit: n(row.grossProfit),
-        ebit: n(row.ebit ?? row.operatingIncome),
-        ebitda: n(row.ebitda ?? row.ebit),
-        incomeTaxExpense: n(row.incomeTaxExpense),
-        incomeBeforeTax: n(row.incomeBeforeTax),
-        interestExpense: n(row.interestExpense),
-        netIncome: n(row.netIncome),
-      });
-    }
-    for (const row of balances) {
-      const year = pickYear(row.endDate);
+    for (const item of series ?? []) {
+      const row = item as unknown as Record<string, unknown>;
+      const year = seriesYear(row);
+      if (!year) continue;
       const cur = byYear.get(year) ?? { year };
-      cur.totalDebt = n(row.longTermDebt) + n(row.shortLongTermDebt) + n(row.totalDebt);
-      cur.cashAndCashEquivalents = n(row.cash ?? row.cashAndCashEquivalents);
-      cur.totalStockholdersEquity = n(row.totalStockholderEquity ?? row.stockholdersEquity);
-      byYear.set(year, cur);
-    }
-    for (const row of cashflows) {
-      const year = pickYear(row.endDate);
-      const cur = byYear.get(year) ?? { year };
-      cur.depreciationAndAmortization = n(row.depreciation ?? row.depreciationAndAmortization);
-      cur.capitalExpenditure = Math.abs(n(row.capitalExpenditures ?? row.capitalExpenditure));
-      cur.changeInWorkingCapital = n(row.changeToNetincome ?? row.changeInWorkingCapital);
-      cur.freeCashFlow =
-        n(row.freeCashFlow) ||
-        n(row.totalCashFromOperatingActivities) - Math.abs(n(row.capitalExpenditures));
+      cur.date = `${year}-12-31`;
+      cur.calendarYear = year;
+      cur.revenue = seriesNum(row, "totalRevenue", "operatingRevenue") || cur.revenue;
+      cur.grossProfit = seriesNum(row, "grossProfit") || cur.grossProfit;
+      cur.ebit = seriesNum(row, "EBIT", "operatingIncome") || cur.ebit;
+      cur.ebitda = seriesNum(row, "EBITDA", "normalizedEBITDA") || cur.ebitda;
+      cur.depreciationAndAmortization =
+        seriesNum(row, "depreciationAndAmortization", "reconciledDepreciation") ||
+        cur.depreciationAndAmortization;
+      cur.capitalExpenditure = Math.abs(seriesNum(row, "capitalExpenditure", "purchaseOfPPE")) || cur.capitalExpenditure;
+      cur.changeInWorkingCapital = seriesNum(row, "changeInWorkingCapital") || cur.changeInWorkingCapital;
+      cur.incomeTaxExpense = seriesNum(row, "taxProvision") || cur.incomeTaxExpense;
+      cur.incomeBeforeTax = seriesNum(row, "pretaxIncome") || cur.incomeBeforeTax;
+      cur.interestExpense = seriesNum(row, "interestExpense", "interestExpenseNonOperating") || cur.interestExpense;
+      cur.netIncome = seriesNum(row, "netIncome") || cur.netIncome;
+      cur.totalDebt = seriesNum(row, "totalDebt") || cur.totalDebt;
+      cur.cashAndCashEquivalents = seriesNum(row, "cashAndCashEquivalents") || cur.cashAndCashEquivalents;
+      cur.totalStockholdersEquity = seriesNum(row, "stockholdersEquity", "commonStockEquity") || cur.totalStockholdersEquity;
+      cur.weightedAverageShsOutDil = seriesNum(row, "dilutedAverageShares") || cur.weightedAverageShsOutDil;
+      cur.freeCashFlow = seriesNum(row, "freeCashFlow") || cur.freeCashFlow;
       byYear.set(year, cur);
     }
 

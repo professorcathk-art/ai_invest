@@ -8,12 +8,7 @@ import {
   sortChronological,
   type OwnershipSnapshot,
 } from "@/lib/data/ownership";
-import {
-  fallbackCatalysts,
-  parseCatalystEvent,
-  type CatalystEvent,
-  type DividendMetrics,
-} from "@/lib/data/catalysts";
+import { parseCatalystEvent, type CatalystEvent, type DividendMetrics } from "@/lib/data/catalysts";
 import type { NewsItem } from "@/lib/data/context";
 import type { Locale } from "@/lib/i18n/messages";
 
@@ -151,22 +146,32 @@ export async function synthesizeCatalysts(input: {
   dividend: DividendMetrics;
   earningsDate: string | null;
 }): Promise<CatalystEvent[]> {
-  const fallback = () => {
-    const fromNews = input.news.slice(0, 5).map((item) => {
-      const parsed = parseCatalystEvent({
-        type: /earnings|業績|results/i.test(item.title)
-          ? "earnings"
-          : /buyback|回購|dividend|派息/i.test(item.title)
-            ? "buyback"
-            : /sec|sfc|監管|probe/i.test(item.title)
-              ? "regulatory"
-              : "other",
-        date: item.publishedAt,
-        title: item.title,
-        impact: /miss|cut|probe|fine|下滑|盈警/i.test(item.title) ? "bearish" : /buyback|beat|回購/i.test(item.title) ? "bullish" : "volatility",
-      });
-      return parsed;
-    }).filter((row): row is CatalystEvent => row != null);
+  const allowedDates = new Set(
+    [input.earningsDate, input.dividend.exDividendDate, ...input.news.map((n) => n.publishedAt?.slice(0, 10))]
+      .filter((d): d is string => Boolean(d)),
+  );
+  const fromSources = (): CatalystEvent[] => {
+    const fromNews = input.news
+      .slice(0, 5)
+      .map((item) =>
+        parseCatalystEvent({
+          type: /earnings|業績|results/i.test(item.title)
+            ? "earnings"
+            : /buyback|回購|dividend|派息/i.test(item.title)
+              ? "buyback"
+              : /sec|sfc|監管|probe/i.test(item.title)
+                ? "regulatory"
+                : "other",
+          date: item.publishedAt,
+          title: item.title,
+          impact: /miss|cut|probe|fine|下滑|盈警/i.test(item.title)
+            ? "bearish"
+            : /buyback|beat|回購/i.test(item.title)
+              ? "bullish"
+              : "volatility",
+        }),
+      )
+      .filter((row): row is CatalystEvent => row != null);
     if (input.earningsDate) {
       fromNews.unshift({
         type: "earnings",
@@ -178,11 +183,10 @@ export async function synthesizeCatalysts(input: {
         impact: "volatility",
       });
     }
-    const unique = fromNews.filter((row, i, arr) => arr.findIndex((other) => other.title === row.title) === i);
-    return unique.length >= 3 ? unique.slice(0, 5) : fallbackCatalysts(input.ticker, input.name, input.locale);
+    return fromNews.filter((row, i, arr) => arr.findIndex((other) => other.title === row.title) === i).slice(0, 5);
   };
 
-  if (!process.env.DEEPSEEK_API_KEY) return fallback();
+  if (!process.env.DEEPSEEK_API_KEY) return fromSources();
 
   const headlines = input.news
     .map((n, i) => `${i + 1}. ${n.title}${n.publishedAt ? ` (${n.publishedAt.slice(0, 10)})` : ""}`)
@@ -190,7 +194,8 @@ export async function synthesizeCatalysts(input: {
   const text = await complete(
     `You synthesize a 3-5 event catalyst calendar for equity research.
 HARD RULES:
-- Use ONLY supplied headlines, the earnings date, and dividend facts. Do not invent filings or numbers.
+- Use ONLY supplied headlines, the earnings date, and dividend facts. Do not invent filings, percentages, or dates.
+- If a date is not in the supplied facts, set date to null. If nothing is known, return { "catalysts": [] }.
 - Digest headlines into event titles; never paste a raw headline string unchanged.
 - type must be earnings|buyback|product|regulatory|other.
 - impact must be bullish|bearish|volatility.
@@ -210,5 +215,8 @@ ${headlines || "(none)"}`,
     .map(parseCatalystEvent)
     .filter((row): row is CatalystEvent => row != null)
     .slice(0, 5);
-  return parsed.length >= 3 ? parsed : fallback();
+  const grounded = parsed
+    .map((row) => (row.date && !allowedDates.has(row.date) ? { ...row, date: null } : row))
+    .slice(0, 5);
+  return grounded.length > 0 ? grounded : fromSources();
 }

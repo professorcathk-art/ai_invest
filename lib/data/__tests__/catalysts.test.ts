@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  catalystsFromNews,
-  fallbackCatalysts,
-  fallbackDividendMetrics,
-  finalizeCatalystPack,
-  ratioToPct,
-} from "../catalysts";
+import { catalystsFromNews, finalizeCatalystPack, ratioToPct } from "../catalysts";
 import { fallbackSmartMoneyInsight } from "@/lib/llm/insights";
 import { messages } from "@/lib/i18n/messages";
 import { ownershipLlmBrief } from "../ownership";
 
-describe("dividend and catalyst fallbacks", () => {
+describe("dividend and catalyst data", () => {
   it("keeps i18n keys aligned", () => {
     expect(Object.keys(messages.en).sort()).toEqual(Object.keys(messages.zh).sort());
     expect(messages.zh.tabCatalysts).toBe("股息與催化劑");
@@ -23,24 +17,22 @@ describe("dividend and catalyst fallbacks", () => {
     expect(ratioToPct(0.45, true)).toBeCloseTo(0.45, 8);
   });
 
-  it("uses ticker-specific dividend fallbacks so the tab is never blank", () => {
-    expect(fallbackDividendMetrics("0005.HK").yieldPct).toBeGreaterThan(4);
-    expect(fallbackDividendMetrics("NVDA").annualDps).toBeLessThan(1);
-    expect(fallbackDividendMetrics("0700.HK").currency).toBe("HKD");
+  it("does not invent dividend figures or catalyst dates when sources are empty", () => {
     const pack = finalizeCatalystPack({
       ticker: "9988.HK",
       name: "Alibaba",
       currency: "USD",
-      source: "fallback",
+      source: "empty",
       synthesized: false,
-      dividend: fallbackDividendMetrics("9988.HK"),
+      dividend: { yieldPct: null, payoutRatioPct: null, exDividendDate: null, annualDps: null },
       history: [],
       catalysts: [],
-      locale: "zh",
     });
     expect(pack.currency).toBe("HKD");
-    expect(pack.catalysts.length).toBeGreaterThanOrEqual(3);
-    expect(pack.catalysts.every((row) => row.title.includes("Alibaba") || row.title.includes("港交所"))).toBe(true);
+    expect(pack.dividend.yieldPct).toBeNull();
+    expect(pack.dividend.annualDps).toBeNull();
+    expect(pack.history).toEqual([]);
+    expect(pack.catalysts).toEqual([]);
   });
 
   it("maps search headlines into structured events", () => {
@@ -61,6 +53,5 @@ describe("dividend and catalyst fallbacks", () => {
     expect(insight.bullets).toHaveLength(3);
     expect(insight.bullets.join(" ")).toMatch(/No ingested CCASS/i);
     expect(ownershipLlmBrief([])).toMatch(/No ingested/);
-    expect(fallbackCatalysts("AAPL", "Apple", "en")[0]?.type).toBe("earnings");
   });
 });

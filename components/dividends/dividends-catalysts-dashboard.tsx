@@ -100,9 +100,6 @@ export function DividendsCatalystsDashboard({
 
   return (
     <div className="space-y-4">
-      {pack.source === "fallback" ? (
-        <p className="text-muted-foreground text-xs text-pretty">{t("divFallbackNote")}</p>
-      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label={t("divYield")} value={fmtPct(pack.dividend.yieldPct)} />
         <Metric label={t("divPayout")} value={fmtPct(pack.dividend.payoutRatioPct)} />

@@ -1,5 +1,5 @@
 import { fetchCompanyContext } from "@/lib/data/context";
-import { fetchLiveDividendPack, finalizeCatalystPack } from "@/lib/data/catalysts";
+import { catalystsFromNews, fetchLiveDividendPack, finalizeCatalystPack } from "@/lib/data/catalysts";
 import { synthesizeCatalysts } from "@/lib/llm/insights";
 import { normalizeSymbol } from "@/lib/data/normalize";
 
@@ -42,7 +42,21 @@ export async function GET(request: Request) {
       })),
     ]);
 
-    let catalysts = [] as Awaited<ReturnType<typeof synthesizeCatalysts>>;
+    let catalysts = catalystsFromNews(ctx.news, locale);
+    if (live.earningsDate) {
+      catalysts = [
+        {
+          type: "earnings" as const,
+          date: live.earningsDate,
+          title:
+            locale === "zh"
+              ? `${live.name || ticker} 已排期的業績公布`
+              : `${live.name || ticker} scheduled earnings release`,
+          impact: "volatility" as const,
+        },
+        ...catalysts,
+      ].slice(0, 5);
+    }
     let synthesized = false;
     if (synthesize) {
       try {
@@ -59,7 +73,7 @@ export async function GET(request: Request) {
         );
         synthesized = Boolean(process.env.DEEPSEEK_API_KEY);
       } catch {
-        catalysts = [];
+        // Keep headline-derived events only; never invent a calendar.
       }
     }
 
@@ -67,12 +81,11 @@ export async function GET(request: Request) {
       ticker,
       name: live.name,
       currency: live.currency,
-      source: live.live ? "live" : "fallback",
+      source: live.live ? "live" : "empty",
       synthesized,
       dividend: live.dividend,
       history: live.history,
       catalysts,
-      locale,
     });
 
     return Response.json(pack, { headers: { "Cache-Control": "no-store" } });

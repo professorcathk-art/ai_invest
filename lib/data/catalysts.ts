@@ -31,7 +31,7 @@ export interface DividendCatalystPack {
   ticker: string;
   name: string;
   currency: string;
-  source: "live" | "fallback";
+  source: "live" | "empty";
   synthesized: boolean;
   dividend: DividendMetrics;
   history: DividendHistoryRow[];
@@ -82,128 +82,8 @@ export function isCatalystImpact(value: string): value is CatalystImpact {
   return (CATALYST_IMPACTS as readonly string[]).includes(value);
 }
 
-function hashTicker(ticker: string): number {
-  return [...ticker].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-}
-
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function fallbackCurrency(ticker: string): string {
+function listingCurrency(ticker: string): string {
   return isHkTicker(ticker) ? "HKD" : "USD";
-}
-
-function knownFallback(ticker: string): DividendMetrics & { currency: string } | null {
-  const table: Record<string, DividendMetrics & { currency: string }> = {
-    "0005.HK": { yieldPct: 5.4, payoutRatioPct: 52, exDividendDate: null, annualDps: 4.7, currency: "HKD" },
-    "0011.HK": { yieldPct: 5.1, payoutRatioPct: 50, exDividendDate: null, annualDps: 6.4, currency: "HKD" },
-    "0939.HK": { yieldPct: 5.6, payoutRatioPct: 48, exDividendDate: null, annualDps: 0.4, currency: "HKD" },
-    "1398.HK": { yieldPct: 5.8, payoutRatioPct: 50, exDividendDate: null, annualDps: 0.31, currency: "HKD" },
-    "3988.HK": { yieldPct: 5.9, payoutRatioPct: 51, exDividendDate: null, annualDps: 0.24, currency: "HKD" },
-    "2388.HK": { yieldPct: 5.2, payoutRatioPct: 49, exDividendDate: null, annualDps: 1.5, currency: "HKD" },
-    "0941.HK": { yieldPct: 6.1, payoutRatioPct: 70, exDividendDate: null, annualDps: 4.8, currency: "HKD" },
-    "1299.HK": { yieldPct: 2.3, payoutRatioPct: 35, exDividendDate: null, annualDps: 1.7, currency: "HKD" },
-    "0388.HK": { yieldPct: 2.8, payoutRatioPct: 90, exDividendDate: null, annualDps: 9.1, currency: "HKD" },
-    "0700.HK": { yieldPct: 0.8, payoutRatioPct: 14, exDividendDate: null, annualDps: 3.4, currency: "HKD" },
-    "9988.HK": { yieldPct: 0.7, payoutRatioPct: 18, exDividendDate: null, annualDps: 1.0, currency: "HKD" },
-    "3690.HK": { yieldPct: 0, payoutRatioPct: 0, exDividendDate: null, annualDps: 0, currency: "HKD" },
-    AAPL: { yieldPct: 0.45, payoutRatioPct: 15, exDividendDate: null, annualDps: 1.0, currency: "USD" },
-    MSFT: { yieldPct: 0.7, payoutRatioPct: 25, exDividendDate: null, annualDps: 3.3, currency: "USD" },
-    JPM: { yieldPct: 2.1, payoutRatioPct: 28, exDividendDate: null, annualDps: 5.0, currency: "USD" },
-    XOM: { yieldPct: 3.4, payoutRatioPct: 45, exDividendDate: null, annualDps: 3.9, currency: "USD" },
-    NVDA: { yieldPct: 0.03, payoutRatioPct: 9, exDividendDate: null, annualDps: 0.04, currency: "USD" },
-    TSLA: { yieldPct: 0, payoutRatioPct: 0, exDividendDate: null, annualDps: 0, currency: "USD" },
-    AMZN: { yieldPct: 0, payoutRatioPct: 0, exDividendDate: null, annualDps: 0, currency: "USD" },
-    GOOGL: { yieldPct: 0.3, payoutRatioPct: 8, exDividendDate: null, annualDps: 0.8, currency: "USD" },
-    META: { yieldPct: 0.3, payoutRatioPct: 10, exDividendDate: null, annualDps: 2.1, currency: "USD" },
-  };
-  return table[ticker] ?? null;
-}
-
-export function fallbackDividendMetrics(ticker: string): DividendMetrics & { currency: string } {
-  const known = knownFallback(ticker);
-  if (known) return known;
-  const bankLike = /^(0005|0011|0939|1398|3988|2388|2628)\.HK$/i.test(ticker);
-  const growthLike = /NVDA|TSLA|AMZN|META|3690|1810|1024|9866|9868|2015/i.test(ticker);
-  if (bankLike) {
-    return { yieldPct: 5.2, payoutRatioPct: 50, exDividendDate: null, annualDps: 1.2, currency: fallbackCurrency(ticker) };
-  }
-  if (growthLike) {
-    return { yieldPct: 0, payoutRatioPct: 0, exDividendDate: null, annualDps: 0, currency: fallbackCurrency(ticker) };
-  }
-  return { yieldPct: 1.2, payoutRatioPct: 28, exDividendDate: null, annualDps: 0.6, currency: fallbackCurrency(ticker) };
-}
-
-export function fallbackHistory(ticker: string, dps: number | null, currencyYear = new Date().getUTCFullYear()): DividendHistoryRow[] {
-  const annual = dps != null && dps > 0 ? dps : fallbackDividendMetrics(ticker).annualDps ?? 0;
-  if (annual <= 0) return [];
-  return [0, 1, 2].map((offset) => ({
-    period: String(currencyYear - offset),
-    dps: Math.round(annual * (1 - offset * 0.06) * 1000) / 1000,
-  }));
-}
-
-export function fallbackCatalysts(ticker: string, name: string, locale: Locale): CatalystEvent[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const seed = hashTicker(ticker) % 21;
-  const company = name || ticker;
-  if (locale === "zh") {
-    return [
-      {
-        type: "earnings",
-        date: addDays(today, 18 + seed),
-        title: `${company} 即將公布季度或中期業績`,
-        impact: "volatility",
-      },
-      {
-        type: "buyback",
-        date: addDays(today, 40 + (seed % 7)),
-        title: `${company} 回購或派息政策檢討窗口`,
-        impact: "bullish",
-      },
-      {
-        type: "product",
-        date: addDays(today, 55 + (seed % 11)),
-        title: `${company} 產品或業務更新可能影響市場預期`,
-        impact: "bullish",
-      },
-      {
-        type: "regulatory",
-        date: addDays(today, 72 + (seed % 9)),
-        title: `${isHkTicker(ticker) ? "港交所／監管" : "SEC／行業監管"} 披露與合規節點`,
-        impact: "volatility",
-      },
-    ];
-  }
-  return [
-    {
-      type: "earnings",
-      date: addDays(today, 18 + seed),
-      title: `${company} upcoming earnings or interim results`,
-      impact: "volatility",
-    },
-    {
-      type: "buyback",
-      date: addDays(today, 40 + (seed % 7)),
-      title: `${company} buyback or dividend-policy review window`,
-      impact: "bullish",
-    },
-    {
-      type: "product",
-      date: addDays(today, 55 + (seed % 11)),
-      title: `${company} product or operating update that can reset estimates`,
-      impact: "bullish",
-    },
-    {
-      type: "regulatory",
-      date: addDays(today, 72 + (seed % 9)),
-      title: `${isHkTicker(ticker) ? "HKEX / regulatory" : "SEC / sector-regulatory"} disclosure window`,
-      impact: "volatility",
-    },
-  ];
 }
 
 function classifyHeadline(title: string): { type: CatalystType; impact: CatalystImpact } {
@@ -285,8 +165,7 @@ export async function fetchLiveDividendPack(
   earningsDate: string | null;
 }> {
   const ticker = normalizeSymbol(symbol);
-  const fallback = fallbackDividendMetrics(ticker);
-  let currency = fallback.currency;
+  let currency = listingCurrency(ticker);
   let resolvedName = name || ticker;
   const dividend: DividendMetrics = {
     yieldPct: null,
@@ -358,7 +237,7 @@ export async function fetchLiveDividendPack(
 
     live = [dividend.yieldPct, dividend.payoutRatioPct, dividend.exDividendDate, dividend.annualDps].some((v) => v != null) || history.length > 0;
   } catch {
-    // Yahoo is optional; FMP / fallback below.
+    // Yahoo is optional; FMP may still have a live history.
   }
 
   if (history.length === 0 || dividend.annualDps == null) {
@@ -371,28 +250,7 @@ export async function fetchLiveDividendPack(
     }
   }
 
-  if (!live) {
-    return {
-      ticker,
-      name: resolvedName,
-      currency: fallback.currency,
-      live: false,
-      dividend: {
-        yieldPct: fallback.yieldPct,
-        payoutRatioPct: fallback.payoutRatioPct,
-        exDividendDate: fallback.exDividendDate ?? addDays(new Date().toISOString().slice(0, 10), 12 + (hashTicker(ticker) % 20)),
-        annualDps: fallback.annualDps,
-      },
-      history: fallbackHistory(ticker, fallback.annualDps),
-      earningsDate,
-    };
-  }
-
-  if (history.length === 0 && dividend.annualDps != null && dividend.annualDps > 0) {
-    history = fallbackHistory(ticker, dividend.annualDps);
-  }
-
-  return { ticker, name: resolvedName, currency, live: true, dividend, history, earningsDate };
+  return { ticker, name: resolvedName, currency, live, dividend, history, earningsDate };
 }
 
 export function parseCatalystEvent(input: unknown): CatalystEvent | null {
@@ -414,12 +272,11 @@ export function finalizeCatalystPack(input: {
   ticker: string;
   name: string;
   currency: string;
-  source: "live" | "fallback";
+  source: "live" | "empty";
   synthesized: boolean;
   dividend: DividendMetrics;
   history: DividendHistoryRow[];
   catalysts: CatalystEvent[];
-  locale: Locale;
 }): DividendCatalystPack {
   const ticker = normalizeSymbol(input.ticker);
   const catalysts = input.catalysts
@@ -429,11 +286,11 @@ export function finalizeCatalystPack(input: {
   return {
     ticker,
     name: input.name || ticker,
-    currency: isHkTicker(ticker) ? "HKD" : input.currency || fallbackCurrency(ticker),
+    currency: isHkTicker(ticker) ? "HKD" : input.currency || listingCurrency(ticker),
     source: input.source,
     synthesized: input.synthesized,
     dividend: input.dividend,
     history: input.history.slice(0, 3),
-    catalysts: catalysts.length > 0 ? catalysts : fallbackCatalysts(ticker, input.name, input.locale),
+    catalysts,
   };
 }

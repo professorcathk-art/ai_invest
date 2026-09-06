@@ -21,8 +21,10 @@ export function formatCompact(
   value: number | null | undefined,
   digits = 1,
   code = "USD",
+  allowZero = false,
 ): string {
-  if (value == null || !Number.isFinite(value) || value === 0) return "—";
+  if (value == null || !Number.isFinite(value)) return "—";
+  if (value === 0) return allowZero ? currency(0, 0, code) : "—";
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
   const sample = currency(1, 0, code);
@@ -67,6 +69,26 @@ export function formatPct(value: number | null | undefined, digits = 1): string 
   if (value == null || !Number.isFinite(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;
 }
+
+export function varianceVsMarket(implied: number, market: number): number | null {
+  if (!(implied > 0) || !(market > 0)) return null;
+  return implied / market - 1;
+}
+
+export function heatBand(implied: number, market: number): "green" | "amber" | "red" | "muted" {
+  if (!(market > 0) || !Number.isFinite(implied)) return "muted";
+  const vs = implied / market - 1;
+  if (vs > 0.1) return "green";
+  if (vs >= -0.1) return "amber";
+  return "red";
+}
+
+export const HEAT_COLORS = {
+  green: { background: "#10B981", color: "#052e16" },
+  amber: { background: "#F59E0B", color: "#451a03" },
+  red: { background: "#EF4444", color: "#ffffff" },
+  muted: { background: "#374151", color: "#e5e7eb" },
+} as const;
 
 export function formatMultiple(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return "—";

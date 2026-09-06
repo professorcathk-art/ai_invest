@@ -4,6 +4,7 @@ import {
   buildQuote,
   defaultTaxRate,
   finalizeCompany,
+  mergeRawYears,
   normalizeSymbol,
   type RawYear,
 } from "./normalize";
@@ -46,11 +47,55 @@ function seriesNum(row: Record<string, unknown>, ...keys: string[]): number {
 function seriesYear(row: Record<string, unknown>): number {
   const raw = row.date ?? row.asOfDate ?? row.endDate;
   if (raw instanceof Date) return raw.getUTCFullYear();
+  if (raw && typeof raw === "object" && "raw" in raw) {
+    const d = new Date(Number((raw as { raw: number }).raw) * (String((raw as { raw: number }).raw).length < 12 ? 1000 : 1));
+    if (!Number.isNaN(d.getTime())) return d.getUTCFullYear();
+  }
   if (typeof raw === "string" || typeof raw === "number") {
-    const d = new Date(raw);
+    const d = new Date(typeof raw === "number" && raw < 1e12 ? raw * 1000 : raw);
     if (!Number.isNaN(d.getTime())) return d.getUTCFullYear();
   }
   return 0;
+}
+
+function rawNum(value: unknown): number {
+  if (value && typeof value === "object" && "raw" in value) return n((value as { raw: unknown }).raw);
+  return n(value);
+}
+
+function historyRows(block: unknown): RawYear[] {
+  if (!block || typeof block !== "object") return [];
+  const rec = block as Record<string, unknown>;
+  const list = (rec.incomeStatementHistory ??
+    rec.balanceSheetStatements ??
+    rec.cashflowStatements ??
+    rec.cashFlowStatements ??
+    []) as unknown[];
+  const rows = Array.isArray(list) ? list : [];
+  return rows.map((item) => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const year = seriesYear(row);
+    return {
+      year,
+      calendarYear: year,
+      date: `${year}-12-31`,
+      revenue: rawNum(row.totalRevenue ?? row.operatingRevenue),
+      grossProfit: rawNum(row.grossProfit),
+      ebit: rawNum(row.ebit ?? row.operatingIncome),
+      ebitda: rawNum(row.ebitda),
+      depreciationAndAmortization: rawNum(row.depreciation ?? row.reconciledDepreciation),
+      capitalExpenditure: Math.abs(rawNum(row.capitalExpenditures ?? row.capitalExpenditure)),
+      changeInWorkingCapital: rawNum(row.changeInWorkingCapital),
+      incomeTaxExpense: rawNum(row.incomeTaxExpense ?? row.taxProvision),
+      incomeBeforeTax: rawNum(row.incomeBeforeTax ?? row.pretaxIncome),
+      interestExpense: rawNum(row.interestExpense),
+      netIncome: rawNum(row.netIncome),
+      totalDebt: rawNum(row.totalDebt ?? row.longTermDebt),
+      cashAndCashEquivalents: rawNum(row.cash ?? row.cashAndCashEquivalents),
+      totalStockholdersEquity: rawNum(row.totalStockholderEquity ?? row.stockholdersEquity),
+      freeCashFlow: rawNum(row.freeCashFlow),
+    };
+  });
 }
 
 export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancials | null> {
@@ -59,9 +104,9 @@ export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancia
   try {
     const yf = await client();
     const period1 = new Date();
-    period1.setUTCFullYear(period1.getUTCFullYear() - 5);
+    period1.setUTCFullYear(period1.getUTCFullYear() - 8);
 
-    const [quote, summary, series] = await Promise.all([
+    const [quote, summary, series, statements] = await Promise.all([
       yf.quote(ticker),
       yf.quoteSummary(ticker, {
         modules: ["price", "summaryDetail", "defaultKeyStatistics", "financialData"],
@@ -73,6 +118,11 @@ export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancia
           module: "all",
         })
         .catch(() => []),
+      yf
+        .quoteSummary(ticker, {
+          modules: ["incomeStatementHistory", "balanceSheetHistory", "cashflowStatementHistory"],
+        })
+        .catch(() => null),
     ]);
 
     const byYear = new Map<number, RawYear>();
@@ -104,7 +154,16 @@ export async function fetchYahooCompany(symbol: string): Promise<CompanyFinancia
       byYear.set(year, cur);
     }
 
-    const years = assembleYears([...byYear.values()], defaultTaxRate(ticker), warnings);
+    const years = assembleYears(
+      mergeRawYears([
+        [...byYear.values()],
+        historyRows(statements?.incomeStatementHistory),
+        historyRows(statements?.balanceSheetHistory),
+        historyRows(statements?.cashflowStatementHistory),
+      ]),
+      defaultTaxRate(ticker),
+      warnings,
+    );
     if (years.length === 0) return null;
 
     const last = years.at(-1);

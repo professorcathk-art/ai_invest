@@ -57,6 +57,30 @@ export interface RawYear {
   netWorkingCapital?: number;
 }
 
+/** Prefer a filled P&L field over a later 0/null from BS/CF of the same year. */
+export function mergeRawYears(groups: Array<RawYear[] | null | undefined>): RawYear[] {
+  const byYear = new Map<number, RawYear>();
+  for (const rows of groups) {
+    for (const row of rows ?? []) {
+      const year = num(row.calendarYear ?? row.year ?? (row.date ? new Date(row.date).getFullYear() : 0));
+      if (year < 1990) continue;
+      const cur = byYear.get(year) ?? { year, calendarYear: year };
+      for (const [key, value] of Object.entries(row)) {
+        if (value == null || value === "") continue;
+        const existing = (cur as Record<string, unknown>)[key];
+        if (typeof value === "number" && value === 0 && typeof existing === "number" && existing !== 0) {
+          continue;
+        }
+        (cur as Record<string, unknown>)[key] = value;
+      }
+      cur.year = year;
+      cur.calendarYear = year;
+      byYear.set(year, cur);
+    }
+  }
+  return [...byYear.values()];
+}
+
 export function assembleYears(raw: RawYear[], taxFallback: number, warnings: string[]): StatementYear[] {
   const sorted = [...raw]
     .map((r) => ({
@@ -85,16 +109,23 @@ export function assembleYears(raw: RawYear[], taxFallback: number, warnings: str
       fcf: num(r.freeCashFlow),
       roic: opt(r.roic),
     }))
-    .filter((y) => y.year > 1990 && (y.revenue > 0 || Math.abs(y.ebit) > 0 || Math.abs(y.netIncome) > 0))
-    .sort((a, b) => a.year - b.year)
-    .slice(-5);
+    .filter((y) => y.year > 1990 && y.revenue > 0)
+    .sort((a, b) => a.year - b.year);
 
-  if (sorted.length < 3) {
+  const consecutive: typeof sorted = [];
+  for (const y of sorted) {
+    const prev = consecutive.at(-1);
+    if (prev && y.year !== prev.year + 1) consecutive.length = 0;
+    consecutive.push(y);
+  }
+  const kept = (consecutive.length ? consecutive : sorted).slice(-5);
+
+  if (kept.length < 3) {
     warnings.push("Fewer than 3 years of statements — projections use more defaults.");
   }
 
-  return sorted.map((y, i) => {
-    const prev = sorted[i - 1];
+  return kept.map((y, i) => {
+    const prev = kept[i - 1];
     const deltaNwc =
       y.deltaNwc !== 0 ? y.deltaNwc : prev && y.nwc && prev.nwc ? y.nwc - prev.nwc : 0;
     const ebitda = y.ebitda || y.ebit + y.da;
@@ -182,6 +213,19 @@ export function isUsableValuation(
   return dcf.marketPrice > 0 && Number.isFinite(dcf.impliedPriceGordon);
 }
 
+export function usableStatementYears(years: CompanyFinancials["years"]): CompanyFinancials["years"] {
+  const complete = [...years]
+    .filter((y) => y.year > 1990 && y.revenue > 0)
+    .sort((a, b) => a.year - b.year);
+  const run: typeof complete = [];
+  for (const y of complete) {
+    const prev = run.at(-1);
+    if (prev && y.year !== prev.year + 1) run.length = 0;
+    run.push(y);
+  }
+  return (run.length ? run : complete).slice(-5);
+}
+
 export function finalizeCompany(
   source: CompanyFinancials["source"],
   symbol: string,
@@ -189,12 +233,13 @@ export function finalizeCompany(
   years: StatementYear[],
   warnings: string[],
 ): CompanyFinancials {
-  if (years.length === 0) {
+  const kept = usableStatementYears(years);
+  if (kept.length === 0) {
     warnings.push("No usable financial statements — engines will use conservative placeholders.");
   }
   return {
     quote,
-    years,
+    years: kept,
     source,
     warnings: [...new Set(warnings)],
     defaults: defaultRates(symbol),

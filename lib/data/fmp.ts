@@ -3,6 +3,7 @@ import {
   assembleYears,
   buildQuote,
   finalizeCompany,
+  mergeRawYears,
   normalizeSymbol,
   type RawYear,
 } from "./normalize";
@@ -46,36 +47,27 @@ export async function fetchFmpCompany(symbol: string): Promise<CompanyFinancials
   const warnings: string[] = [];
 
   const [income, balance, cash, quoteRows, profileRows, metrics] = await Promise.all([
-    fmp<RawYear[]>(`/income-statement/${ticker}?period=annual&limit=5`),
-    fmp<RawYear[]>(`/balance-sheet-statement/${ticker}?period=annual&limit=5`),
-    fmp<RawYear[]>(`/cash-flow-statement/${ticker}?period=annual&limit=5`),
+    fmp<RawYear[]>(`/income-statement/${ticker}?period=annual&limit=8`),
+    fmp<RawYear[]>(`/balance-sheet-statement/${ticker}?period=annual&limit=8`),
+    fmp<RawYear[]>(`/cash-flow-statement/${ticker}?period=annual&limit=8`),
     fmp<Array<Record<string, unknown>>>(`/quote/${ticker}`),
     fmp<Array<Record<string, unknown>>>(`/profile/${ticker}`),
-    fmp<Array<Record<string, unknown>>>(`/key-metrics/${ticker}?period=annual&limit=5`),
+    fmp<Array<Record<string, unknown>>>(`/key-metrics/${ticker}?period=annual&limit=8`),
   ]);
 
   if (!income || !Array.isArray(income) || income.length === 0) return null;
 
-  const byYear = new Map<number, RawYear>();
-  const merge = (rows: RawYear[] | null) => {
-    for (const row of rows ?? []) {
-      const year = Number(row.calendarYear ?? row.year ?? (row.date ? new Date(row.date).getFullYear() : 0));
-      byYear.set(year, { ...byYear.get(year), ...row, year });
-    }
-  };
-  merge(income);
-  merge(balance);
-  merge(cash);
+  const merged = mergeRawYears([income, balance, cash]);
   if (metrics) {
     for (const m of metrics) {
       const year = Number(m.calendarYear ?? m.year ?? 0);
-      const existing = byYear.get(year);
-      if (existing) existing.roic = Number(m.roic ?? 0);
+      const existing = merged.find((row) => Number(row.year ?? row.calendarYear) === year);
+      if (existing && Number(m.roic ?? 0)) existing.roic = Number(m.roic);
     }
   }
 
   const { defaultTaxRate } = await import("./normalize");
-  const years = assembleYears([...byYear.values()], defaultTaxRate(ticker), warnings);
+  const years = assembleYears(merged, defaultTaxRate(ticker), warnings);
   const q = quoteRows?.[0] ?? {};
   const p = profileRows?.[0] ?? {};
   const last = years.at(-1);

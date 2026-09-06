@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isTickerRelatedHeadline } from "../context";
-import { reportingCurrency } from "../normalize";
-import { formatMoney } from "@/lib/format";
+import { assembleYears, mergeRawYears, reportingCurrency } from "../normalize";
+import { formatMoney, heatBand } from "@/lib/format";
 
 describe("headline relevance", () => {
   it("keeps Bank of China headlines and drops unrelated market color", () => {
@@ -19,6 +19,38 @@ describe("reporting currency", () => {
     expect(reportingCurrency("9988.HK", "HKD")).toBe("HKD");
     expect(formatMoney(154.5, "HKD")).toBe("HKD 154.50");
     expect(formatMoney(-101.99, "HKD")).toBe("-HKD 101.99");
+  });
+});
+
+describe("historical merge", () => {
+  it("does not let a later zero wipe the first year's income statement", () => {
+    const merged = mergeRawYears([
+      [{ calendarYear: 2022, revenue: 80_000, grossProfit: 20_000, ebit: 10_000, netIncome: 8_000 }],
+      [{ calendarYear: 2022, revenue: 0, totalDebt: 5_000, cashAndCashEquivalents: 1_000 }],
+    ]);
+    expect(merged[0]?.revenue).toBe(80_000);
+    expect(merged[0]?.totalDebt).toBe(5_000);
+    const years = assembleYears(
+      [
+        { calendarYear: 0, revenue: 0, netIncome: 1 },
+        { calendarYear: 2022, revenue: 80_000, ebit: 10_000, netIncome: 8_000 },
+        { calendarYear: 2023, revenue: 90_000, ebit: 12_000, netIncome: 9_000 },
+        { calendarYear: 2024, revenue: 100_000, ebit: 14_000, netIncome: 10_000 },
+      ],
+      0.21,
+      [],
+    );
+    expect(years).toHaveLength(3);
+    expect(years[0]?.year).toBe(2022);
+    expect(years[0]?.revenue).toBe(80_000);
+  });
+});
+
+describe("heatmap bands", () => {
+  it("uses ±10% vs current price", () => {
+    expect(heatBand(111, 100)).toBe("green");
+    expect(heatBand(105, 100)).toBe("amber");
+    expect(heatBand(89, 100)).toBe("red");
   });
 });
 

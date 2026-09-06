@@ -13,10 +13,13 @@ export async function readCachedFinancials(ticker: string): Promise<CompanyFinan
     .maybeSingle();
   if (error || !data) return null;
   if (new Date(data.expires_at as string).getTime() < Date.now()) return null;
-  const { defaultRates, isUsableFinancials } = await import("./normalize");
+  const { defaultRates, isUsableFinancials, usableStatementYears } = await import("./normalize");
+  const rawYears = data.statements as CompanyFinancials["years"];
+  const years = usableStatementYears(rawYears);
+  if (years.length !== rawYears.length) return null;
   const financials: CompanyFinancials = {
     quote: data.quote as CompanyFinancials["quote"],
-    years: data.statements as CompanyFinancials["years"],
+    years,
     source: data.source as CompanyFinancials["source"],
     warnings: (data.warnings as string[]) ?? [],
     defaults: defaultRates(ticker),

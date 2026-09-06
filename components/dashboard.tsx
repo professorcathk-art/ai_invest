@@ -291,6 +291,7 @@ export function Dashboard() {
                     dcf={bundle.dcf}
                     lbo={bundle.lbo}
                     vc={bundle.vc}
+                    quote={bundle.financials.quote}
                     currency={bundle.financials.quote.currency}
                   />
                 </div>

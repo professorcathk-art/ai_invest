@@ -21,10 +21,34 @@ describe("excel export", () => {
       "LBO Model",
     ]);
     const dcf = wb.getWorksheet("DCF Valuation")!;
-    expect((dcf.getCell("B16").value as { formula?: string }).formula).toContain("NPV");
+    expect(dcf.views?.[0]?.showGridLines).not.toBe(false);
+    expect((dcf.getCell("B29").value as { formula?: string }).formula).toContain("NPV");
+    expect((dcf.getCell("B25").value as { formula?: string }).formula).toContain("$B$5");
+    expect((dcf.getCell("B19").value as { formula?: string }).formula).toContain("B11");
+    expect((dcf.getCell("B35").value as { formula?: string }).formula).toBe("B33-B7");
+    expect((dcf.getCell("B36").value as { formula?: string }).formula).toContain("B34/B8");
+    expect((dcf.getCell("B37").value as { formula?: string }).formula).toContain("B35/B8");
+    expect(dcf.getCell("B3").font?.color?.argb).toMatch(/0000FF$/);
+    expect(dcf.getCell("B29").font?.color?.argb).toMatch(/000000$/);
+    expect(dcf.getCell("B11").font?.color?.argb).toMatch(/008000$/);
+    expect(dcf.getCell("B3").numFmt).toBe("0.0%");
+    expect(dcf.getCell("B6").numFmt).toBe('0.0"x"');
+    expect(dcf.getCell("B36").numFmt).toBe("#,##0.00");
+
+    const hist = wb.getWorksheet("3-Statement Historical")!;
+    const firstYear = Number(hist.getCell("B3").value);
+    expect(firstYear).toBeGreaterThan(1990);
+    expect(Number(hist.getCell("B4").value)).toBeGreaterThan(0);
+    expect(Number(hist.getCell("B5").value)).toBeGreaterThan(0);
+    expect(Number(hist.getCell("B6").value)).toBeGreaterThan(0);
+
     const lbo = wb.getWorksheet("LBO Model")!;
     expect((lbo.getCell("B21").value as { formula?: string }).formula).toContain("IRR");
+    expect((lbo.getCell("B3").value as { formula?: string }).formula).toBe("Summary!B7");
+    expect((lbo.getCell("D25").value as { formula?: string }).formula).toBe("C25*$B$5");
+    expect((lbo.getCell("G25").value as { formula?: string }).formula).toBe("D25+E25");
+
     const summary = wb.getWorksheet("Summary")!;
-    expect((summary.getCell("B7").value as { formula?: string }).formula).toContain("DCF Valuation");
+    expect((summary.getCell("B9").value as { formula?: string }).formula).toContain("DCF Valuation'!B36");
   });
 });

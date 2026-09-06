@@ -68,6 +68,12 @@ export interface DcfResult {
   projectedUfcf: number[];
   projectedEbitda: number[];
   projectedRevenue: number[];
+  lastHistoricalRevenue: number;
+  growthRates: number[];
+  ebitMargin: number;
+  daPct: number;
+  capexPct: number;
+  nwcPct: number;
   wacc: number;
   computedWacc: number;
   terminalValueGordon: number;

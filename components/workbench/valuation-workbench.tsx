@@ -10,17 +10,28 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { DcfResult, LboResult, VcResult } from "@/lib/engines/types";
-import { formatCompact, formatMultiple, formatPct, formatPrice } from "@/lib/format";
+import type { DcfResult, LboResult, Quote, VcResult } from "@/lib/engines/types";
+import {
+  formatCompact,
+  formatMultiple,
+  formatPct,
+  formatPrice,
+  HEAT_COLORS,
+  heatBand,
+  varianceVsMarket,
+} from "@/lib/format";
 import { useI18n } from "@/components/i18n/provider";
 
-function heatColor(value: number, market: number): string {
-  if (!market) return "bg-muted";
-  const upside = value / market - 1;
-  if (upside > 0.2) return "bg-bull/80 text-black";
-  if (upside > 0) return "bg-bull/40";
-  if (upside > -0.15) return "bg-caution/40";
-  return "bg-bear/60";
+function heatStyle(value: number, market: number) {
+  return HEAT_COLORS[heatBand(value, market)];
+}
+
+function varianceLine(implied: number, market: number, currency: string): string {
+  const vs = varianceVsMarket(implied, market);
+  const spot = formatPrice(market, currency);
+  if (vs == null) return `vs Current Price ${spot}`;
+  const signed = `${vs > 0 ? "+" : ""}${formatPct(vs)}`;
+  return `${signed} vs Current Price ${spot}`;
 }
 
 function Sensitivity({
@@ -49,7 +60,7 @@ function Sensitivity({
         <table className="font-financial w-full text-xs">
           <thead>
             <tr>
-              <th className="text-muted-foreground px-2 py-1 text-left">WACC \\ </th>
+              <th className="text-muted-foreground px-2 py-1 text-left">WACC \ </th>
               {cols.map((c) => (
                 <th key={c} className="px-2 py-1 text-right">
                   {colFormat(c)}
@@ -63,7 +74,10 @@ function Sensitivity({
                 <td className="text-muted-foreground px-2 py-1">{formatPct(w)}</td>
                 {matrix[i]?.map((price, j) => (
                   <td key={`${i}-${j}`} className="px-1 py-1">
-                    <div className={`rounded px-2 py-1 text-right ${heatColor(price, market)}`}>
+                    <div
+                      className="rounded px-2 py-1 text-right font-medium"
+                      style={heatStyle(price, market)}
+                    >
                       {formatPrice(price, currency)}
                     </div>
                   </td>
@@ -81,33 +95,52 @@ export function ValuationWorkbench({
   dcf,
   lbo,
   vc,
+  quote,
   currency = "USD",
 }: {
   dcf: DcfResult;
   lbo: LboResult;
   vc: VcResult;
+  quote: Quote;
   currency?: string;
 }) {
   const { t } = useI18n();
+  const ccy = quote.currency || currency;
   const waterfall = [
-    { name: "Entry equity", value: lbo.entryEquity / 1e6 },
-    { name: "Exit equity", value: lbo.base.exitEquity / 1e6 },
-    { name: "Bull exit", value: lbo.bull.exitEquity / 1e6 },
-    { name: "Bear exit", value: lbo.bear.exitEquity / 1e6 },
+    { name: "Entry equity", value: lbo.entryEquity },
+    { name: "Base exit", value: lbo.base.exitEquity },
+    { name: "Bull exit", value: lbo.bull.exitEquity },
+    { name: "Bear exit", value: lbo.bear.exitEquity },
   ];
 
   return (
     <div className="space-y-4">
+      <div className="border-bull/40 bg-bull/10 font-financial flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border px-4 py-3 text-sm">
+        <span>
+          <span className="text-muted-foreground mr-2 tracking-[0.12em] uppercase">Current Price</span>
+          {formatPrice(quote.price, ccy)}
+        </span>
+        <span className="text-muted-foreground hidden sm:inline">|</span>
+        <span>
+          <span className="text-muted-foreground mr-2 tracking-[0.12em] uppercase">Market Cap</span>
+          {formatCompact(quote.marketCap, 1, ccy, true)}
+        </span>
+        <span className="text-muted-foreground hidden sm:inline">|</span>
+        <span>
+          <span className="text-muted-foreground mr-2 tracking-[0.12em] uppercase">Enterprise Value</span>
+          {formatCompact(quote.enterpriseValue, 1, ccy, true)}
+        </span>
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
         <Metric
           label="DCF price (Gordon)"
-          value={formatPrice(dcf.impliedPriceGordon, currency)}
-          hint={dcf.impliedPriceGordon > 0 ? formatPct(dcf.upsideGordon) : "—"}
+          value={formatPrice(dcf.impliedPriceGordon, ccy)}
+          hint={varianceLine(dcf.impliedPriceGordon, dcf.marketPrice, ccy)}
         />
         <Metric
           label="DCF price (Exit)"
-          value={formatPrice(dcf.impliedPriceExit, currency)}
-          hint={dcf.impliedPriceExit > 0 ? formatPct(dcf.upsideExit) : "—"}
+          value={formatPrice(dcf.impliedPriceExit, ccy)}
+          hint={varianceLine(dcf.impliedPriceExit, dcf.marketPrice, ccy)}
         />
         <Metric label="Base LBO IRR / MoIC" value={formatPct(lbo.base.irr)} hint={formatMultiple(lbo.base.moic)} />
       </div>
@@ -122,7 +155,7 @@ export function ValuationWorkbench({
           matrix={dcf.sensitivityWaccGrowth}
           market={dcf.marketPrice}
           colFormat={formatPct}
-          currency={currency}
+          currency={ccy}
         />
         <Sensitivity
           title="DCF sensitivity — WACC vs exit multiple"
@@ -131,23 +164,28 @@ export function ValuationWorkbench({
           matrix={dcf.sensitivityWaccExit}
           market={dcf.marketPrice}
           colFormat={formatMultiple}
-          currency={currency}
+          currency={ccy}
         />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-sm">LBO equity waterfall ($m)</CardTitle>
+            <CardTitle className="text-sm">LBO Exit Equity Scenarios</CardTitle>
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={waterfall}>
                 <CartesianGrid stroke="#1f2937" vertical={false} />
                 <XAxis dataKey="name" stroke="#9ca3af" fontSize={11} />
-                <YAxis stroke="#9ca3af" fontSize={11} />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={11}
+                  width={72}
+                  tickFormatter={(v) => formatCompact(Number(v), 1, ccy, true)}
+                />
                 <Tooltip
                   contentStyle={{ background: "#111827", border: "1px solid #1f2937" }}
-                  formatter={(v) => [`$${Number(v ?? 0).toFixed(1)}m`, "Equity"]}
+                  formatter={(v) => [formatCompact(Number(v ?? 0), 1, ccy, true), "Equity"]}
                 />
                 <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -182,8 +220,8 @@ export function ValuationWorkbench({
               <div className="text-muted-foreground mb-2 text-xs tracking-wide uppercase">{s.label}</div>
               <div>IRR {formatPct(s.irr)}</div>
               <div>MoIC {formatMultiple(s.moic)}</div>
-              <div>Exit equity {formatCompact(s.exitEquity, 1, currency)}</div>
-              <div>Ending debt {formatCompact(s.endingDebt, 1, currency)}</div>
+              <div>Exit equity {formatCompact(s.exitEquity, 1, ccy)}</div>
+              <div>Ending debt {formatCompact(s.endingDebt, 1, ccy)}</div>
             </div>
           ))}
         </CardContent>

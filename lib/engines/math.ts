@@ -2,6 +2,11 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/** Share prices, IRR and MoIC never print below zero. */
+export function floorNonNeg(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 export function safeDiv(num: number, den: number): number | null {
   if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return null;
   return num / den;

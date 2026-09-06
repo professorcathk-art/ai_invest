@@ -115,31 +115,23 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
     ],
     debate: [
       {
-        speaker: "thiel",
-        text: `Warren, you are anchoring on ${upside} of DCF upside as if cheapness were a strategy. Growth is ${yoy}. If this is not a 10x technology, a lower multiple just means the market already knows the product is copyable. I would rather miss a 'safe' compounder than own a value trap that looks responsible in a spreadsheet.`,
+        speaker: "buffett",
+        text: `The binding question is the moat and owner earnings, not a repeated vote. FCF margin is ${fcfm} and ROIC is ${roic}. If that is not a wonderful business, ${dcfPrice} versus ${price} is a value trap.`,
       },
       {
-        speaker: "buffett",
-        text: `Peter, growth that does not convert to cash is theatre. FCF margin is ${fcfm} and ROIC is ${roic}. I have no interest in paying for a story that has not yet shown up in owner earnings. If the moat is real, ${dcfPrice} versus ${price} is the only negotiation. If it is not, your 40% hurdle is a slogan.`,
+        speaker: "thiel",
+        text: `Warren's cash test misses the monopoly cut. Growth is ${yoy} and gross margin ${gm}. If this is incremental commodity tech, cheapness is not a strategy.`,
       },
       {
         speaker: "pe",
-        text: `Gentlemen, the model is the model. We put ${formatPct(sliders.debtPct)} debt on ${formatCompact(lbo.entryEv, 1, ccy)} of entry EV. Base IRR is ${irr} on ${moic} MoIC. If FCF conversion stays at ${conv}, we can pay 6.5% and amortize. I do not need a monopoly and I do not need a cigar butt. I need cash that shows up on Tuesday.`,
+        text: `I will not restate growth. Supply chain and leverage decide bankability: ${formatPct(sliders.debtPct)} debt on entry EV, base IRR ${irr} / ${moic}. A 15% EBITDA miss must still service 6.5%.`,
       },
       {
         speaker: "dalio",
-        text: `A 15% EBITDA miss drops IRR to ${bearIrr}. Pair that with net leverage of ${nd} and you have a cycle problem, not a stock story. When the next tightening comes, WACC and the exit multiple move together. Anyone underwriting only the base case is not doing risk parity; they are doing hope.`,
-      },
-      {
-        speaker: "thiel",
-        text: `The PE book will optimize a mediocre asset until it is a slightly better mediocre asset. Gross margin of ${gm} and YoY of ${yoy} do not become a monopoly because you levered them 50/50. If we cannot describe the 10x, we should not be in the room.`,
-      },
-      {
-        speaker: "pe",
-        text: `Bull IRR is ${bullIrr}. That is the option value if operations work. I will take a known cash machine over a philosophical monopoly. We can argue ideology after the debt is down. Until then, conversion and covenants run the meeting.`,
+        text: `Operations do not survive a closed credit window. Bear IRR ${bearIrr} with leverage ${nd} is a cycle problem. I vote the downturn, not the base case.`,
       },
     ],
-    chairSummary: `The engines have spoken in numbers: DCF ${dcfPrice} versus ${price} (${upside}), LBO IRR ${irr} / MoIC ${moic}, growth ${yoy}, FCF margin ${fcfm}, leverage ${nd}. Buffett will not stretch without a wider margin of safety. Thiel will not stretch without monopoly economics. The PE seat will stretch if conversion holds through the bear. Dalio will veto if the cycle and the balance sheet disagree. Majority is a ${bundle.personas.filter((p) => p.vote !== "pass").length >= 2 ? "conditional" : "cautious"} posture until one of those facts changes — a cheaper quote, faster growth, or cleaner leverage.`,
+    chairSummary: `Majority is a ${bundle.personas.filter((p) => p.vote !== "pass").length >= 2 ? "conditional" : "cautious"} posture. A flip requires a wider margin of safety, a real 10x, cleaner conversion, or a stronger balance sheet.`,
   };
 }
 

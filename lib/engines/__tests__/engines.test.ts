@@ -101,6 +101,26 @@ describe("DCF", () => {
     const low = runDcf(fixture(), { ...sliders, wacc: 0.07 });
     expect(low.impliedPriceGordon).toBeGreaterThan(high.impliedPriceGordon);
   });
+
+  it("floors cash-burning equity value at zero instead of a negative share price", () => {
+    const loss = fixture();
+    loss.years = loss.years.map((y) => ({
+      ...y,
+      ebit: -Math.abs(y.revenue) * 0.2,
+      ebitda: -Math.abs(y.revenue) * 0.1,
+      fcf: -Math.abs(y.revenue) * 0.15,
+      totalDebt: 5_000_000_000,
+      cash: 1,
+    }));
+    const dcf = runDcf(loss, sliders);
+    expect(dcf.impliedPriceGordon).toBe(0);
+    expect(dcf.impliedPriceExit).toBe(0);
+    expect(dcf.sensitivityWaccGrowth.flat().every((p) => p >= 0)).toBe(true);
+    const lbo = runLbo(loss, sliders);
+    expect(lbo.base.irr).toBeGreaterThanOrEqual(0);
+    expect(lbo.base.moic).toBeGreaterThanOrEqual(0);
+    expect(lbo.bear.irr).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe("LBO", () => {
@@ -141,7 +161,7 @@ describe("bundle", () => {
     const analysis = fallbackAnalysis(bundle);
     const parsed = icAnalysisSchema.parse(analysis);
     expect(parsed.narratives).toHaveLength(4);
-    expect(parsed.debate.length).toBeGreaterThanOrEqual(6);
+    expect(parsed.debate).toHaveLength(4);
     expect(parsed.narratives.every((n) => n.argument.length > 200)).toBe(true);
   });
 });

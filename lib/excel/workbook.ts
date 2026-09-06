@@ -250,6 +250,12 @@ export async function buildWorkbook(bundle: EngineBundle): Promise<Buffer> {
     years.at(-1)?.revenue ?? 0,
     "#,##0",
   );
+  label(
+    summary.getCell("A18"),
+    "InvestMouse is an AI research demo and does not provide SFC-licensed investment advice. Models use automated calculations & public data.",
+  );
+  summary.mergeCells("A18:B18");
+  summary.getRow(18).height = 28;
   summary.getColumn(1).width = 28;
   summary.getColumn(2).width = 22;
 

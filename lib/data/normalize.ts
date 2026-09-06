@@ -173,18 +173,13 @@ export function isUsableFinancials(financials: CompanyFinancials): boolean {
   return complete.length >= 3;
 }
 
-/** Books + a computed DCF (negative equity value is a real result for cash-burning names). */
+/** Books + a computed DCF. Floored-at-zero prices still count as a real result. */
 export function isUsableValuation(
   financials: CompanyFinancials,
   dcf: { impliedPriceGordon: number; marketPrice: number; enterpriseValueGordon: number },
 ): boolean {
   if (!isUsableFinancials(financials)) return false;
-  return (
-    dcf.marketPrice > 0 &&
-    Number.isFinite(dcf.impliedPriceGordon) &&
-    dcf.impliedPriceGordon !== 0 &&
-    Number.isFinite(dcf.enterpriseValueGordon)
-  );
+  return dcf.marketPrice > 0 && Number.isFinite(dcf.impliedPriceGordon);
 }
 
 export function finalizeCompany(

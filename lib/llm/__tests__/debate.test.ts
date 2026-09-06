@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  debateMode,
   debateTurnGuide,
   debateVerdict,
   fallbackDebate,
@@ -40,27 +41,26 @@ describe("debate vote pairing", () => {
     expect(pairingRule("INVEST", "PASS")).toBe("challenge_thesis");
   });
 
-  it("builds voting_results and turn rules from narratives", () => {
-    const votes = votingResults([
+  it("flags unanimous PASS vs split", () => {
+    const unanimous = votingResults([
+      narrative("buffett", "pass"),
+      narrative("thiel", "pass"),
+      narrative("pe", "pass"),
+      narrative("dalio", "pass"),
+    ]);
+    const split = votingResults([
       narrative("buffett", "pass"),
       narrative("thiel", "pass"),
       narrative("pe", "pass"),
       narrative("dalio", "conditional_invest"),
     ]);
-    expect(votes).toEqual({
-      buffett: "PASS",
-      thiel: "PASS",
-      pe: "PASS",
-      dalio: "CONDITIONAL",
-    });
-    const guide = debateTurnGuide(votes);
-    expect(guide).toContain("thiel replies to buffett");
-    expect(guide).toContain("MUST agree");
-    expect(guide).toContain("dalio replies to pe");
-    expect(guide).toContain("MUST challenge");
+    expect(debateMode(unanimous)).toBe("unanimous_pass");
+    expect(debateTurnGuide(unanimous)).toContain("PRIORITY OF FAILURE");
+    expect(debateMode(split)).toBe("split");
+    expect(debateTurnGuide(split)).toContain("SPLIT");
   });
 
-  it("stitches six debate turns from finished memos without inventing figures", () => {
+  it("stitches four debate turns without timeout copy", () => {
     const part = fallbackDebate(
       [
         narrative("buffett", "pass"),
@@ -70,8 +70,8 @@ describe("debate vote pairing", () => {
       ],
       "zh",
     );
-    expect(part.debate).toHaveLength(6);
-    expect(part.debate[1]?.text).toContain("同意");
+    expect(part.debate).toHaveLength(4);
+    expect(part.debate[1]?.text).toContain("最致命");
     expect(part.chairSummary).not.toMatch(/逾時|timeout/i);
   });
 });

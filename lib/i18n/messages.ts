@@ -40,6 +40,14 @@ export const messages = {
     risks: "What would break the thesis",
     workbenchHidden:
       "Statements are too thin for a DCF table. Committee review still runs on the quote and any usable years.",
+    dcfNegativeNote:
+      "Equity value is floored at zero when free cash flow cannot cover net debt. The model does not print negative share prices.",
+    legalTitle: "Terms of Use & Regulatory Disclaimer | 使用條款與免責聲明",
+    legalBody:
+      "InvestMouse is an AI-driven educational research demonstration platform. Content generated (including valuation models, persona analyses, and voting verdicts) is strictly for academic and analytical demonstration purposes and DOES NOT constitute financial advice, investment recommendations, or an offer to buy/sell securities. InvestMouse is NOT licensed by the Securities and Futures Commission (SFC) of Hong Kong or any regulatory authority. Financial markets involve risk. Consult a licensed financial advisor before making investment decisions.\n\nInvestMouse 為人工智能與數據分析示範平台，所有估值模型與 AI 審查觀點僅供學術研究與示範用途，不構成任何投資建議或證券邀約。本平台未獲香港證監會（SFC）發牌。投資涉及風險，請諮詢持牌財務顧問。",
+    legalAgree: "I Understand & Agree",
+    legalFooter:
+      "InvestMouse is an AI research demo and does not provide SFC-licensed investment advice. Models use automated calculations & public data.",
     debateTitle: "Committee debate",
     debateGenerating: "in progress",
     debateWait: "Run a committee review to hear the four investors argue. Nothing is shown before that.",
@@ -140,6 +148,14 @@ export const messages = {
     catalysts: "什麼會改變投票",
     risks: "什麼會推翻論點",
     workbenchHidden: "財報年期不足，估值模型暫不顯示。仍可用現價與已有年期開始委員會審閱。",
+    dcfNegativeNote:
+      "自由現金流不足以覆蓋淨負債時，股權價值下限為零。模型不會顯示負股價。",
+    legalTitle: "Terms of Use & Regulatory Disclaimer | 使用條款與免責聲明",
+    legalBody:
+      "InvestMouse is an AI-driven educational research demonstration platform. Content generated (including valuation models, persona analyses, and voting verdicts) is strictly for academic and analytical demonstration purposes and DOES NOT constitute financial advice, investment recommendations, or an offer to buy/sell securities. InvestMouse is NOT licensed by the Securities and Futures Commission (SFC) of Hong Kong or any regulatory authority. Financial markets involve risk. Consult a licensed financial advisor before making investment decisions.\n\nInvestMouse 為人工智能與數據分析示範平台，所有估值模型與 AI 審查觀點僅供學術研究與示範用途，不構成任何投資建議或證券邀約。本平台未獲香港證監會（SFC）發牌。投資涉及風險，請諮詢持牌財務顧問。",
+    legalAgree: "我已了解並同意",
+    legalFooter:
+      "InvestMouse 為人工智能研究示範，並非證監會持牌投資建議。模型使用自動計算與公開數據。",
     debateTitle: "委員會辯論",
     debateGenerating: "進行中",
     debateWait: "開始委員會審閱後，四位投資人才會互相辯駁。完成前不顯示內容。",

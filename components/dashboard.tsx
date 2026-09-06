@@ -23,6 +23,7 @@ import { ExcelExportButton } from "@/components/excel-export-button";
 import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
 import { LanguageToggle } from "@/components/i18n/language-toggle";
 import { LandingHero } from "@/components/home/landing-hero";
+import { ComplianceModal, DisclaimerFooter } from "@/components/compliance-modal";
 import { useI18n } from "@/components/i18n/provider";
 import { runEngines } from "@/lib/engines";
 import { isUsableValuation } from "@/lib/data/normalize";
@@ -180,7 +181,8 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 md:px-8">
+    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 pb-16 md:px-8">
+      <ComplianceModal />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-bull text-[11px] tracking-[0.22em] uppercase">{t("brand")}</p>
@@ -310,6 +312,7 @@ export function Dashboard() {
           {analysis ? <ReferencesPanel context={payload.context} /> : null}
         </>
       )}
+      <DisclaimerFooter />
     </div>
   );
 }

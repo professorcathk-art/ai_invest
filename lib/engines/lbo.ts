@@ -1,5 +1,5 @@
 import type { CompanyFinancials, LboResult, LboScenario, LboYear, SliderAssumptions } from "./types";
-import { latest } from "./math";
+import { floorNonNeg, latest } from "./math";
 
 const HOLD_YEARS = 5;
 const INTEREST_RATE = 0.065;
@@ -39,9 +39,9 @@ function buildScenario(
 
   const year5 = years.at(-1)!;
   const exitEv = year5.ebitda * exitMultiple;
-  const exitEquity = exitEv - year5.endingDebt;
-  const moic = entryEquity > 0 ? exitEquity / entryEquity : 0;
-  const irr = moic > 0 ? moic ** (1 / HOLD_YEARS) - 1 : -1;
+  const exitEquity = floorNonNeg(exitEv - year5.endingDebt);
+  const moic = floorNonNeg(entryEquity > 0 ? exitEquity / entryEquity : 0);
+  const irr = moic > 0 ? moic ** (1 / HOLD_YEARS) - 1 : 0;
 
   return {
     name,

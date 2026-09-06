@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DcfResult, LboResult, VcResult } from "@/lib/engines/types";
 import { formatCompact, formatMultiple, formatPct, formatPrice } from "@/lib/format";
+import { useI18n } from "@/components/i18n/provider";
 
 function heatColor(value: number, market: number): string {
   if (!market) return "bg-muted";
@@ -87,14 +88,7 @@ export function ValuationWorkbench({
   vc: VcResult;
   currency?: string;
 }) {
-  if (!(dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0)) {
-    return (
-      <p className="text-muted-foreground py-10 text-sm">
-        Valuation tables stay hidden until the DCF produces a real price.
-      </p>
-    );
-  }
-
+  const { t } = useI18n();
   const waterfall = [
     { name: "Entry equity", value: lbo.entryEquity / 1e6 },
     { name: "Exit equity", value: lbo.base.exitEquity / 1e6 },
@@ -105,10 +99,21 @@ export function ValuationWorkbench({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <Metric label="DCF price (Gordon)" value={formatPrice(dcf.impliedPriceGordon, currency)} hint={formatPct(dcf.upsideGordon)} />
-        <Metric label="DCF price (Exit)" value={formatPrice(dcf.impliedPriceExit, currency)} hint={formatPct(dcf.upsideExit)} />
+        <Metric
+          label="DCF price (Gordon)"
+          value={formatPrice(dcf.impliedPriceGordon, currency)}
+          hint={dcf.impliedPriceGordon > 0 ? formatPct(dcf.upsideGordon) : "—"}
+        />
+        <Metric
+          label="DCF price (Exit)"
+          value={formatPrice(dcf.impliedPriceExit, currency)}
+          hint={dcf.impliedPriceExit > 0 ? formatPct(dcf.upsideExit) : "—"}
+        />
         <Metric label="Base LBO IRR / MoIC" value={formatPct(lbo.base.irr)} hint={formatMultiple(lbo.base.moic)} />
       </div>
+      {dcf.equityValueGordon < 0 || dcf.impliedPriceGordon === 0 ? (
+        <p className="text-muted-foreground text-pretty text-sm">{t("dcfNegativeNote")}</p>
+      ) : null}
       <div className="grid gap-4 xl:grid-cols-2">
         <Sensitivity
           title="DCF sensitivity — WACC vs terminal growth"

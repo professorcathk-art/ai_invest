@@ -23,7 +23,7 @@ describe("reporting currency", () => {
 });
 
 describe("usable valuation", () => {
-  it("keeps a cash-burning name on the workbench when Gordon DCF is negative", async () => {
+  it("keeps a cash-burning name on the workbench when Gordon DCF is floored at zero", async () => {
     const { isUsableValuation } = await import("../normalize");
     const years = [2022, 2023, 2024].map((year) => ({
       year,
@@ -69,7 +69,7 @@ describe("usable valuation", () => {
           warnings: [],
           defaults: { riskFreeRate: 0.035, equityRiskPremium: 0.055, costOfDebt: 0.065, taxRate: 0.165 },
         },
-        { impliedPriceGordon: -101.99, marketPrice: 29.5, enterpriseValueGordon: -2e11 },
+        { impliedPriceGordon: 0, marketPrice: 29.5, enterpriseValueGordon: 0 },
       ),
     ).toBe(true);
   });

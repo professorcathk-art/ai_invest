@@ -39,10 +39,17 @@ export function metricsBrief(bundle: EngineBundle): string {
       },
       dcf: {
         currency: ccy,
-        impliedPriceGordon: formatMoney(dcf.impliedPriceGordon, ccy),
-        impliedPriceExit: formatMoney(dcf.impliedPriceExit, ccy),
-        upsideGordon: formatPct(dcf.upsideGordon),
-        upsideExit: formatPct(dcf.upsideExit),
+        impliedPriceGordon:
+          dcf.impliedPriceGordon > 0
+            ? formatMoney(dcf.impliedPriceGordon, ccy)
+            : `${ccy} 0.00 (floored at zero; FCF does not support positive equity)`,
+        impliedPriceExit:
+          dcf.impliedPriceExit > 0
+            ? formatMoney(dcf.impliedPriceExit, ccy)
+            : `${ccy} 0.00 (floored at zero; FCF does not support positive equity)`,
+        upsideGordon:
+          dcf.impliedPriceGordon > 0 ? formatPct(dcf.upsideGordon) : "n/a (equity floored at zero)",
+        upsideExit: dcf.impliedPriceExit > 0 ? formatPct(dcf.upsideExit) : "n/a (equity floored at zero)",
         evGordon: formatMoneyCompact(dcf.enterpriseValueGordon, ccy),
         netDebt: formatMoneyCompact(dcf.netDebt, ccy),
       },

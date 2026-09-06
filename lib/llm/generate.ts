@@ -7,7 +7,7 @@ import {
   type IcAnalysis,
 } from "./schemas";
 import { PERSONA_LENSES } from "./lenses";
-import { debateTurnGuide, votingResults } from "./debate";
+import { debateSystemPrompt, votingResults } from "./debate";
 import type { EngineBundle } from "@/lib/engines/types";
 import { contextBrief, type CompanyContext } from "@/lib/data/context";
 import type { AnalysisDepth, Locale } from "@/lib/i18n/messages";
@@ -93,8 +93,9 @@ ${persona.lens}
 
 HARD RULES:
 - Use ONLY the supplied engine JSON and public context. Never invent financial figures, headlines, or filings.
+- QUALITATIVE FIRST: analyze business model, moat, supply chain or macro mechanics BEFORE quoting valuation figures.
 - SYNTHESIS: weave business model + market catalysts (digested from headlines) + engine figures. Never recap numbers without saying what they mean for the vote.
-- Follow your lens's 3-paragraph structure inside argument (use \\n\\n between paragraphs).
+- Follow your lens's 3-part structure inside argument (use \\n\\n between paragraphs).
 - Never copy-paste raw headline title strings into prose.
 - CURRENCY: company.reportingCurrency is the only money unit. Quote prices as "HKD 154.50", "-HKD 101.99", or "USD 190". Keep the minus on negative DCF / EV. Never convert, and never write USD / 美元 / $ unless reportingCurrency is USD. Hong Kong listings (.HK) are HKD.
 - ${rule}
@@ -136,37 +137,13 @@ export async function generateDebate(
         `${n.id.toUpperCase()} vote=${n.vote} verdict=${votes[n.id]} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
     )
     .join("\n\n");
-  const length =
-    depth === "professional"
-      ? "Each turn is a dense paragraph with figures — no sentence-count padding."
-      : "Each turn is a tight paragraph with at least one engine figure.";
   const text = await complete(
-    `You are the IC secretary recording a LIVE argument, not four speeches.
-VOTING_RESULTS (binding — never invent or flip these votes):
-${JSON.stringify(votes)}
-
-TURN-TAKING LOGIC (mandatory):
-- PASS vs PASS, or INVEST vs CONDITIONAL (same family): the reply MUST AGREE with the prior speaker's PASS/INVEST conclusion. The reply MAY criticize their framework or metrics (e.g. "I agree with Warren's PASS, but I am passing because this lacks a 10x moat, not because of the DCF.").
-- INVEST/CONDITIONAL vs PASS (opposite families): the reply MUST challenge the prior speaker's thesis and vote.
-- NEVER write "I disagree with your decision/vote/conclusion" when both speakers reached the same PASS or INVEST-family verdict.
-- Cross-fire turns 5–8 must follow the same pairing rule against the person they name.
-
-STRUCTURE (mandatory, 6–8 turns):
-1. Buffett opens with his ${votes.buffett} vote and two engine figures.
-2. Thiel replies to Buffett BY NAME.
-3. PE replies to Thiel BY NAME.
-4. Dalio replies to PE BY NAME.
-5–8. Cross-fire. Every turn names the previous speaker and the claim being answered.
-PAIRINGS:
-${debateTurnGuide(votes)}
-FORBIDDEN: parallel monologues, "I agree with the group", a turn that does not address someone else, or fake disagreement on a shared PASS/INVEST verdict.
-CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD.
-${length}
-Then a dense chairSummary: who won, who dissented, and what number would flip the majority. The summary must match VOTING_RESULTS. Do not paste raw headline titles.
+    `${debateSystemPrompt(votes)}
+CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD. Never paste raw headline titles.
 ${languageRule(locale)}
 Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
     `Persona memos:\n${digest}\n\nMetrics:\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,
-    depth === "professional" ? 1800 : 1400,
+    depth === "professional" ? 1200 : 900,
   );
   return debateSchema.parse(extractJson(text));
 }

@@ -1,5 +1,5 @@
 import type { CompanyFinancials, DcfResult, SliderAssumptions } from "./types";
-import { clamp, latest, linspace, npv, round, ufcf as calcUfcf, yoy } from "./math";
+import { clamp, floorNonNeg, latest, linspace, npv, round, ufcf as calcUfcf, yoy } from "./math";
 import { computeWacc } from "./wacc";
 
 const FORECAST_YEARS = 5;
@@ -77,8 +77,8 @@ export function runDcf(financials: CompanyFinancials, sliders: SliderAssumptions
 
   const equityValueGordon = enterpriseValueGordon - netDebt;
   const equityValueExit = enterpriseValueExit - netDebt;
-  const impliedPriceGordon = equityValueGordon / shares;
-  const impliedPriceExit = equityValueExit / shares;
+  const impliedPriceGordon = floorNonNeg(equityValueGordon / shares);
+  const impliedPriceExit = floorNonNeg(equityValueExit / shares);
   const marketPrice = financials.quote.price;
   const upsideGordon = marketPrice > 0 ? impliedPriceGordon / marketPrice - 1 : 0;
   const upsideExit = marketPrice > 0 ? impliedPriceExit / marketPrice - 1 : 0;
@@ -89,7 +89,7 @@ export function runDcf(financials: CompanyFinancials, sliders: SliderAssumptions
 
   const priceAt = (w: number, tv: number) => {
     const ev = npv(w, projectedUfcf) + tv / (1 + w) ** FORECAST_YEARS;
-    return (ev - netDebt) / shares;
+    return floorNonNeg((ev - netDebt) / shares);
   };
 
   const sensitivityWaccGrowth = waccAxis.map((w) =>

@@ -20,7 +20,7 @@ export const debateTurnSchema = z.object({
 
 export const icAnalysisSchema = z.object({
   narratives: z.array(personaNarrativeSchema).length(4),
-  debate: z.array(debateTurnSchema).min(6).max(8),
+  debate: z.array(debateTurnSchema).min(4).max(4),
   chairSummary: z.string(),
 });
 

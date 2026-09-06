@@ -1,52 +1,64 @@
 #!/usr/bin/env python3
-"""Push HK CCASS (or US ownership) snapshots into InvestMouse.
-
-This is a local iMac runner. Plug your CCASS scrape into `build_payload`
-— do not commit scraped files or tokens. The API upserts on (ticker, as_of_date).
-
-  export INVESTMOUSE_API_URL=http://localhost:3010/api/ownership/ingest
-  export RESEARCH_INGEST_TOKEN=...
-  python3 scripts/sync_ccass.py 9988.HK
-"""
+"""Fetch HKEX CCASS / Yahoo ownership and POST to InvestMouse ingest."""
 
 from __future__ import annotations
 
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 
-API_URL = os.getenv("INVESTMOUSE_API_URL", "http://localhost:3000/api/ownership/ingest")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ccass_hkex import build_hk_payload
+from ownership_us import build_us_payload
+
+API_URL = os.getenv("INVESTMOUSE_API_URL", "").strip()
 INGEST_TOKEN = os.getenv("RESEARCH_INGEST_TOKEN", "")
 
 
-def build_payload(ticker: str) -> dict:
-    """Replace this with your local CCASS / 13F parser.
+def has_real_metrics(payload: dict) -> bool:
+    numbers = [
+        payload.get("institutional_pct"),
+        payload.get("retail_pct"),
+        payload.get("inst_holding_pct"),
+        payload.get("insider_holding_pct"),
+        payload.get("short_interest_pct"),
+        payload.get("net_insider_usd"),
+    ]
+    if any(value is not None for value in numbers):
+        return True
+    return bool(payload.get("top_buyers") or payload.get("top_sellers"))
 
-    Expected HK fields: institutional_pct, retail_pct, top_buyers, top_sellers.
-    Expected US fields: inst_holding_pct, insider_holding_pct, short_interest_pct, net_insider_usd.
-    """
-    market = "HK" if ticker.upper().endswith(".HK") else "US"
-    return {
-        "ticker": ticker,
-        "as_of_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "market_type": market,
-        "signal_type": "NEUTRAL",
-        "institutional_pct": None,
-        "retail_pct": None,
-        "top_buyers": [],
-        "top_sellers": [],
-    }
+
+def build_payload(ticker: str) -> dict:
+    symbol = ticker.strip().upper()
+    if symbol.endswith(".HK"):
+        return build_hk_payload(symbol)
+    return build_us_payload(symbol)
 
 
 def fetch_and_push(ticker: str = "9988.HK") -> int:
     if not INGEST_TOKEN or INGEST_TOKEN == "your_secret_token_here":
         print("RESEARCH_INGEST_TOKEN is not set.")
         return 2
+    if not API_URL:
+        print("INVESTMOUSE_API_URL is not set.")
+        return 2
 
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Pushing ownership snapshot for {ticker}")
-    payload = build_payload(ticker)
+    try:
+        payload = build_payload(ticker)
+    except Exception as exc:  # noqa: BLE001 — operator log
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Fetch failed for {ticker}: {exc}")
+        return 1
+
+    if not has_real_metrics(payload):
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Skip {ticker}: no figures returned.")
+        return 0
+
+    print(f"[{datetime.now(timezone.utc).isoformat()}] Pushing {ticker} {payload.get('signal_type')}")
     try:
         res = requests.post(
             API_URL,
@@ -59,7 +71,7 @@ def fetch_and_push(ticker: str = "9988.HK") -> int:
         )
         print(f"Ingest Status: {res.status_code}, Response: {res.text}")
         return 0 if res.ok else 1
-    except Exception as exc:  # noqa: BLE001 — local operator script
+    except Exception as exc:  # noqa: BLE001
         print(f"Error pushing data: {exc}")
         return 1
 

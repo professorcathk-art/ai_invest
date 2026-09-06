@@ -39,7 +39,7 @@ Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/.
 
 Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
 
-HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Push rows from an iMac with `scripts/sync_ccass.py` (Bearer `RESEARCH_INGEST_TOKEN`).
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. The iMac weekday job is `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
 
 ## Scripts
 

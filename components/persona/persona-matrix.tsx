@@ -4,14 +4,15 @@ import { Check, Loader2, Minus, Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 import type { PersonaScorecard } from "@/lib/engines/types";
-import { formatMultiple, formatNumber, formatPct, voteLabel, voteTone } from "@/lib/format";
+import { formatMultiple, formatNumber, formatPct, voteTone } from "@/lib/format";
+import { CHECK_I18N, type MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/components/i18n/provider";
 
 function formatActual(check: PersonaScorecard["checks"][number]): string {
   const value = check.actual;
   if (value == null) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (check.format === "years") return `${value} / 5 years`;
+  if (check.format === "years") return `${value} / 5`;
   if (check.format === "number") return formatNumber(value, 1);
   if (check.format === "multiple") return formatMultiple(value);
   if (check.format === "pct") return formatPct(value);
@@ -36,6 +37,9 @@ export function PersonaMatrix({
   analyzing: boolean;
 }) {
   const { t } = useI18n();
+  const voteText = (vote: "strong_invest" | "conditional_invest" | "pass") =>
+    vote === "strong_invest" ? t("voteStrong") : vote === "conditional_invest" ? t("voteConditional") : t("votePass");
+
   if (!analysis && !analyzing) {
     return (
       <Card className="bg-card border-border border-dashed">
@@ -63,8 +67,11 @@ export function PersonaMatrix({
                 {narrative ? (
                   <div className="shrink-0 text-right">
                     <div className="font-financial text-xl">{Math.round(narrative.conviction)}</div>
+                    <div className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                      {t("conviction")}
+                    </div>
                     <div className={`text-xs font-medium ${voteTone(narrative.vote)}`}>
-                      {voteLabel(narrative.vote)}
+                      {voteText(narrative.vote)}
                     </div>
                   </div>
                 ) : null}
@@ -78,19 +85,36 @@ export function PersonaMatrix({
                 </div>
               ) : null}
               {booksReady && narrative ? (
-                <ul className="space-y-2">
-                  {card.checks.map((check) => (
-                    <li key={check.id} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Status passed={check.passed} />
-                        {check.label}
-                      </span>
-                      <span className="font-financial text-muted-foreground shrink-0 text-xs">
-                        {formatActual(check)} · {check.target}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground text-left">
+                        <th className="pb-2 pr-2 font-medium">{t("colMetric")}</th>
+                        <th className="pb-2 pr-2 text-right font-medium">{t("colCompany")}</th>
+                        <th className="pb-2 pr-2 text-right font-medium">{t("colHurdle")}</th>
+                        <th className="pb-2 w-6" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {card.checks.map((check) => (
+                        <tr key={check.id} className="border-border/60 border-t">
+                          <td className="py-1.5 pr-2">
+                            {t((CHECK_I18N[check.id] ?? "colMetric") as MessageKey)}
+                          </td>
+                          <td className="font-financial py-1.5 pr-2 text-right">
+                            {formatActual(check)}
+                          </td>
+                          <td className="text-muted-foreground font-financial py-1.5 pr-2 text-right">
+                            {check.target}
+                          </td>
+                          <td className="py-1.5">
+                            <Status passed={check.passed} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : null}
               {narrative ? (
                 <div className="min-w-0 space-y-3">

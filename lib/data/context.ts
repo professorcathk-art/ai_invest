@@ -1,3 +1,4 @@
+import type { Locale } from "@/lib/i18n/messages";
 import { isHkTicker, normalizeSymbol } from "./normalize";
 
 export interface NewsItem {
@@ -63,9 +64,8 @@ async function fmpJson<T>(path: string): Promise<T | null> {
   }
 }
 
-async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
+async function parseRss(url: string, publisher: string): Promise<NewsItem[]> {
   try {
-    const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`;
     const res = await fetch(url, { next: { revalidate: 300 } });
     if (!res.ok) return [];
     const xml = await res.text();
@@ -78,7 +78,7 @@ async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
       if (!title) continue;
       items.push({
         title,
-        publisher: "Yahoo Finance",
+        publisher,
         url: link.trim(),
         publishedAt: pub ? new Date(pub).toISOString() : null,
       });
@@ -87,6 +87,24 @@ async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
   } catch {
     return [];
   }
+}
+
+async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
+  return parseRss(
+    `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`,
+    "Yahoo Finance",
+  );
+}
+
+async function googleNewsRss(ticker: string, name: string, locale: Locale): Promise<NewsItem[]> {
+  const query = `"${name}" OR ${ticker} (earnings OR results OR annual OR 業績 OR 年報)`;
+  const hl = locale === "zh" ? "zh-HK" : "en-US";
+  const gl = locale === "zh" ? "HK" : "US";
+  const items = await parseRss(
+    `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${gl}:${hl}`,
+    "Google News",
+  );
+  return items.filter((item) => isTickerRelatedHeadline(item.title, ticker, name));
 }
 
 function decodeXml(value: string): string {
@@ -127,9 +145,34 @@ function pushRef(list: SourceRef[], ref: SourceRef) {
 function filingLinks(ticker: string, name: string): SourceRef[] {
   const symbol = normalizeSymbol(ticker);
   const code = symbol.replace(/\.HK$/i, "").replace(/^0+/, "") || symbol;
+  const q = encodeURIComponent(`${name} ${symbol}`);
   const refs: SourceRef[] = [
     {
-      title: `${symbol} Yahoo Finance quote & financials`,
+      title: `${name} investor relations / annual report search`,
+      source: "Company IR",
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${name} investor relations annual report`)}`,
+      kind: "report",
+    },
+    {
+      title: `Financial Times coverage — ${symbol}`,
+      source: "Financial Times",
+      url: `https://www.ft.com/search?q=${q}`,
+      kind: "news",
+    },
+    {
+      title: `Reuters coverage — ${symbol}`,
+      source: "Reuters",
+      url: `https://www.reuters.com/site-search/?query=${q}`,
+      kind: "news",
+    },
+    {
+      title: `Bloomberg coverage — ${symbol}`,
+      source: "Bloomberg",
+      url: `https://www.bloomberg.com/search?query=${q}`,
+      kind: "news",
+    },
+    {
+      title: `${symbol} Yahoo Finance financials`,
       source: "Yahoo Finance",
       url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/financials`,
       kind: "report",
@@ -165,7 +208,7 @@ function filingLinks(ticker: string, name: string): SourceRef[] {
   return refs;
 }
 
-export async function fetchCompanyContext(symbol: string): Promise<CompanyContext> {
+export async function fetchCompanyContext(symbol: string, locale: Locale = "en"): Promise<CompanyContext> {
   const ticker = normalizeSymbol(symbol);
   const news: NewsItem[] = [];
   const highlights: CompanyHighlight[] = [];
@@ -287,6 +330,9 @@ export async function fetchCompanyContext(symbol: string): Promise<CompanyContex
     pushHighlight(highlights, "Website", fp.website);
   }
 
+  const google = await googleNewsRss(ticker, companyName, locale);
+  news.push(...google);
+
   if (news.length < 3) {
     const extras = await fmpNews(ticker);
     news.push(...extras.filter((item) => isTickerRelatedHeadline(item.title, ticker, companyName)));
@@ -313,7 +359,7 @@ export async function fetchCompanyContext(symbol: string): Promise<CompanyContex
     businessSummary: businessSummary.slice(0, 1800),
     news: uniqueNews.slice(0, 6),
     highlights: uniqueHighlights.slice(0, 8),
-    references: references.slice(0, 10),
+    references: references.slice(0, 14),
   };
 }
 

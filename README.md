@@ -30,6 +30,8 @@ Set these in Vercel → Project → Settings → Environment Variables:
 
 Hobby functions hard-timeout at **60 seconds**. IC uses four parallel DeepSeek calls plus a chair, then returns.
 
+Investor writing style lives in `lib/llm/lenses.ts` — edit that file to change Buffett / Thiel / PE / Dalio. Concise vs Professional is chosen when you start a committee review.
+
 ### Public sources (no new paid API)
 
 Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/...&s=TICKER`), not from Yahoo’s generic search feed (that feed is why older builds showed unrelated stories). Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.

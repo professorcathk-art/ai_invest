@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CompanyContext } from "@/lib/data/context";
+import { HIGHLIGHT_I18N, type MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/components/i18n/provider";
 
 export function CompanyContextPanel({ context }: { context: CompanyContext }) {
@@ -23,7 +24,7 @@ export function CompanyContextPanel({ context }: { context: CompanyContext }) {
                 {context.highlights.map((item) => (
                   <div key={`${item.label}-${item.value}`}>
                     <dt className="text-muted-foreground text-[10px] tracking-[0.12em] uppercase">
-                      {item.label}
+                      {HIGHLIGHT_I18N[item.label] ? t(HIGHLIGHT_I18N[item.label] as MessageKey) : item.label}
                     </dt>
                     <dd className="truncate">{item.value}</dd>
                   </div>

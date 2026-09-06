@@ -6,9 +6,10 @@ import {
   personaNarrativeSchema,
   type IcAnalysis,
 } from "./schemas";
+import { PERSONA_LENSES } from "./lenses";
 import type { EngineBundle } from "@/lib/engines/types";
 import { contextBrief, type CompanyContext } from "@/lib/data/context";
-import type { Locale } from "@/lib/i18n/messages";
+import type { AnalysisDepth, Locale } from "@/lib/i18n/messages";
 import { z } from "zod";
 
 Object.defineProperty(globalThis, "AI_SDK_LOG_WARNINGS", {
@@ -17,26 +18,10 @@ Object.defineProperty(globalThis, "AI_SDK_LOG_WARNINGS", {
 });
 
 export const PERSONAS = [
-  {
-    id: "buffett" as const,
-    name: "Warren Buffett",
-    lens: `Think as Warren Buffett writing an IC memo. Focus on owner earnings, durable moat, predictability, capital allocation, and margin of safety. Ask: would I be happy owning the whole company at this price for 10 years? Cite DCF upside, ROIC, FCF history, and leverage. Use recent headlines only as color, not as a substitute for cash.`,
-  },
-  {
-    id: "thiel" as const,
-    name: "Peter Thiel",
-    lens: `Think as Peter Thiel. Competition is for losers. Look for 10x technology, monopoly, network effects, proprietary insight. Contrast incremental growth with zero-to-one. Gross margin and YoY vs the 40%/70% bars. If this is a bank or a commodity franchise, say so plainly.`,
-  },
-  {
-    id: "pe" as const,
-    name: "PE Partner (KKR / Blackstone)",
-    lens: `Think as a buyout partner. Underwrite cash conversion, debt service at 6.5%, 5% paydown, base/bull/bear IRR and MoIC vs 20% / 2.5x. Discuss cost-out, multiple contraction, and whether the capital structure survives a 15% EBITDA miss.`,
-  },
-  {
-    id: "dalio" as const,
-    name: "Ray Dalio",
-    lens: `Think as Ray Dalio. Map the company to the economic machine: inflation, rates, credit, sovereign and supply-chain exposure. Stress the balance sheet (net debt/EBITDA). Do not vote the base case; vote the downturn.`,
-  },
+  { id: "buffett" as const, name: "Warren Buffett", lens: PERSONA_LENSES.buffett },
+  { id: "thiel" as const, name: "Peter Thiel", lens: PERSONA_LENSES.thiel },
+  { id: "pe" as const, name: "PE Partner (KKR / Blackstone)", lens: PERSONA_LENSES.pe },
+  { id: "dalio" as const, name: "Ray Dalio", lens: PERSONA_LENSES.dalio },
 ];
 
 function extractJson(text: string): unknown {
@@ -59,7 +44,7 @@ async function complete(system: string, prompt: string, maxOutputTokens: number)
     prompt,
     maxRetries: 0,
     maxOutputTokens,
-    temperature: 0.4,
+    temperature: 0.35,
     providerOptions: {
       deepseek: {
         thinking: { type: "disabled" },
@@ -71,8 +56,29 @@ async function complete(system: string, prompt: string, maxOutputTokens: number)
 
 function languageRule(locale: Locale): string {
   return locale === "zh"
-    ? "Write EVERY string field in Simplified Chinese (简体中文). Keep JSON keys, ticker symbols, and numbers unchanged."
+    ? "Write EVERY string field in Traditional Chinese (繁體中文，香港／台灣用語). Keep JSON keys, ticker symbols, and Arabic numerals unchanged."
     : "Write all string fields in English.";
+}
+
+function depthRule(depth: AnalysisDepth): { rule: string; tokens: number } {
+  if (depth === "professional") {
+    return {
+      tokens: 1800,
+      rule: `PROFESSIONAL MODE:
+- argument = 8–12 sentences. valuationTake = 5–7 sentences. Each thesis bullet = 2–3 sentences that include a number.
+- First sentence must name the company, ticker, and spot price from the JSON.
+- Quote at least FOUR engine figures with the exact printed values (price, DCF, IRR, margins, FCF years, leverage, etc.).
+- Quote at least ONE headline or filing by its exact title from the supplied sources. If none exist, write "no usable headline was supplied".
+- Do not write generic lines such as "the moat looks durable" unless you attach a number that supports or kills that claim.
+- If a metric is "—" or null, say the books are incomplete for that item.`,
+    };
+  }
+  return {
+    tokens: 1100,
+    rule: `CONCISE MODE:
+- argument = 4–6 sentences. valuationTake = 2–3 sentences. Each thesis bullet = 1–2 sentences.
+- Still cite at least three engine figures with exact values. No slogans without numbers.`,
+  };
 }
 
 export async function generatePersonaNarrative(
@@ -80,21 +86,23 @@ export async function generatePersonaNarrative(
   bundle: EngineBundle,
   ctx: CompanyContext,
   locale: Locale = "en",
+  depth: AnalysisDepth = "concise",
 ): Promise<z.infer<typeof personaNarrativeSchema>> {
   const persona = PERSONAS.find((p) => p.id === personaId)!;
+  const { rule, tokens } = depthRule(depth);
   const text = await complete(
     `You are ${persona.name} sitting in a live Investment Committee.
 ${persona.lens}
-RULES:
-- Use ONLY the supplied engine metrics and public context. Never invent financial figures or filings.
-- Cite headlines or filings only if they appear in the supplied sources.
-- Write a real memo, not a slogan. argument = 5–8 sentences. valuationTake = 3–4 sentences. Each thesis bullet = 2 sentences.
+
+HARD RULES:
+- Use ONLY the supplied engine JSON and public context. Never invent financial figures, headlines, or filings.
+- ${rule}
 - ${languageRule(locale)}
 - Return ONLY a JSON object with keys: id, vote ("strong_invest"|"conditional_invest"|"pass"), conviction (0-100 integer), thesis (3-5 strings), valuationTake, argument, catalysts (2-4), risks (2-4).
 - vote is YOUR IC recommendation. conviction is how strongly you hold that vote.
 - id must be "${persona.id}".`,
-    `Company metrics (deterministic engines):\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,
-    1400,
+    `Company metrics (deterministic engines — quote these):\n${metricsBrief(bundle)}\n\nPublic context (cite titles, do not invent):\n${contextBrief(ctx)}`,
+    tokens,
   );
   const parsed = extractJson(text);
   if (!parsed || typeof parsed !== "object") throw new Error("Persona JSON was not an object");
@@ -118,6 +126,7 @@ export async function generateDebate(
   bundle: EngineBundle,
   ctx: CompanyContext,
   locale: Locale = "en",
+  depth: AnalysisDepth = "concise",
 ): Promise<Pick<IcAnalysis, "debate" | "chairSummary">> {
   const digest = narratives
     .map(
@@ -125,12 +134,22 @@ export async function generateDebate(
         `${n.id.toUpperCase()} vote=${n.vote} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
     )
     .join("\n\n");
+  const length = depth === "professional" ? "Each turn is 4–6 sentences." : "Each turn is 3–4 sentences.";
   const text = await complete(
-    `You are the IC secretary. Write a heated debate (6-8 turns) where Buffett, Thiel, the PE partner, and Dalio argue AGAINST each other using the engine figures and their votes. Each turn is 3–5 sentences. Then a 4–6 sentence chairSummary that states the consensus vote.
+    `You are the IC secretary recording a LIVE argument, not four speeches.
+STRUCTURE (mandatory, 6–8 turns):
+1. Buffett opens with his vote and two engine figures.
+2. Thiel replies to Buffett BY NAME, quotes one Buffett claim, and attacks it with a different figure.
+3. PE replies to Thiel BY NAME and quotes Thiel.
+4. Dalio replies to PE BY NAME.
+5–8. Cross-fire. Every turn must start by naming the previous speaker and the claim being rejected.
+FORBIDDEN: parallel monologues, "I agree with the group", or a turn that does not address someone else.
+${length}
+Then a 4–6 sentence chairSummary that states who won, who dissented, and what number would flip the majority.
 ${languageRule(locale)}
 Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
     `Persona memos:\n${digest}\n\nMetrics:\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,
-    1600,
+    depth === "professional" ? 1800 : 1400,
   );
   return debateSchema.parse(extractJson(text));
 }
@@ -139,9 +158,10 @@ export async function generateIcAnalysis(
   bundle: EngineBundle,
   ctx: CompanyContext,
   locale: Locale = "en",
+  depth: AnalysisDepth = "concise",
 ): Promise<IcAnalysis> {
   const results = await Promise.allSettled(
-    PERSONAS.map((p) => generatePersonaNarrative(p.id, bundle, ctx, locale)),
+    PERSONAS.map((p) => generatePersonaNarrative(p.id, bundle, ctx, locale, depth)),
   );
   const narratives = results
     .filter((r): r is PromiseFulfilledResult<IcAnalysis["narratives"][number]> => r.status === "fulfilled")
@@ -155,6 +175,6 @@ export async function generateIcAnalysis(
   const ordered = PERSONAS.map((p) => narratives.find((n) => n.id === p.id)).filter(
     (n): n is IcAnalysis["narratives"][number] => Boolean(n),
   );
-  const { debate, chairSummary } = await generateDebate(ordered, bundle, ctx, locale);
+  const { debate, chairSummary } = await generateDebate(ordered, bundle, ctx, locale, depth);
   return icAnalysisSchema.parse({ narratives: ordered, debate, chairSummary });
 }

@@ -65,13 +65,19 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
       };
       try {
-        const ctx = await fetchCompanyContext(bundle.financials.quote.ticker);
+        const ctx = await fetchCompanyContext(bundle.financials.quote.ticker, parsed.locale);
         send({ type: "context", context: ctx });
 
         const results = await withBudget(
           Promise.allSettled(
             PERSONAS.map(async (persona) => {
-              const narrative = await generatePersonaNarrative(persona.id, bundle, ctx, parsed.locale);
+              const narrative = await generatePersonaNarrative(
+                persona.id,
+                bundle,
+                ctx,
+                parsed.locale,
+                parsed.depth,
+              );
               send({ type: "persona", narrative });
               return narrative;
             }),
@@ -100,14 +106,14 @@ export async function POST(request: Request) {
 
         let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
         try {
-          debatePart = await generateDebate(narratives, bundle, ctx, parsed.locale);
+          debatePart = await generateDebate(narratives, bundle, ctx, parsed.locale, parsed.depth);
         } catch {
           debatePart = {
             debate: [],
             chairSummary:
               parsed.locale === "zh"
-                ? "四份备忘录已完成，书记辩论超时。如需完整辩论记录，请再运行一次投委会分析。"
-                : "Chair debate timed out after the four persona memos were written. Re-run IC if you need the argument transcript.",
+                ? "四份備忘錄已完成，辯論紀錄逾時。如需完整辯駁，請再開始一次委員會審閱。"
+                : "The four memos are done; the debate transcript timed out. Run the review again if you need the argument.",
           };
         }
         const analysis = {

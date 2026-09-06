@@ -5,6 +5,7 @@ import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { CompanyFinancials, SliderAssumptions } from "@/lib/engines/types";
+import { useI18n } from "@/components/i18n/provider";
 
 export function ExcelExportButton({
   financials,
@@ -13,6 +14,7 @@ export function ExcelExportButton({
   financials: CompanyFinancials;
   sliders: SliderAssumptions;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
 
   async function download() {
@@ -46,7 +48,7 @@ export function ExcelExportButton({
       className="border-bull text-bull hover:bg-bull/10"
     >
       {busy ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
-      Export Dynamic Excel Model (.xlsx)
+      {t("exportExcel")}
     </Button>
   );
 }

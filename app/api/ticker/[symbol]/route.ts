@@ -5,17 +5,18 @@ import { isUsableFinancials, isUsableValuation } from "@/lib/data/normalize";
 import { defaultSliders, runEngines } from "@/lib/engines";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ symbol: string }> },
 ) {
   const { symbol } = await params;
+  const lang = new URL(request.url).searchParams.get("lang") === "zh" ? "zh" : "en";
   try {
     const financials = await loadCompany(symbol);
     const sliders = defaultSliders(financials);
     const bundle = runEngines(financials, sliders);
     const booksReady = isUsableFinancials(financials);
     const valuationReady = isUsableValuation(financials, bundle.dcf);
-    const context = await fetchCompanyContext(financials.quote.ticker).catch(() => ({
+    const context = await fetchCompanyContext(financials.quote.ticker, lang).catch(() => ({
       businessSummary: "",
       news: [],
       highlights: [],

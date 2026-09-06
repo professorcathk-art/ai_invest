@@ -1,9 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TickerSearch } from "@/components/header/ticker-search";
 import { QuoteBar } from "@/components/header/quote-bar";
@@ -20,6 +27,7 @@ import { isUsableValuation } from "@/lib/data/normalize";
 import type { CompanyFinancials, PersonaScorecard, SliderAssumptions } from "@/lib/engines/types";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 import type { CompanyContext } from "@/lib/data/context";
+import type { AnalysisDepth } from "@/lib/i18n/messages";
 
 interface Payload {
   financials: CompanyFinancials;
@@ -36,6 +44,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<IcAnalysis | null>(null);
+  const [modeOpen, setModeOpen] = useState(false);
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -50,7 +59,7 @@ export function Dashboard() {
     setLoading(true);
     setAnalysis(null);
     try {
-      const res = await fetch(`/api/ticker/${encodeURIComponent(symbol)}`);
+      const res = await fetch(`/api/ticker/${encodeURIComponent(symbol)}?lang=${locale}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Ticker failed");
       const next: Payload = {
@@ -72,8 +81,24 @@ export function Dashboard() {
     }
   }
 
-  async function runIc() {
+  const ticker = payload?.financials.quote.ticker;
+  useEffect(() => {
+    if (!ticker) return;
+    fetch(`/api/ticker/${encodeURIComponent(ticker)}?lang=${locale}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.context) {
+          setPayload((prev) => (prev ? { ...prev, context: json.context } : prev));
+        }
+      })
+      .catch(() => {
+        // Locale refresh is optional.
+      });
+  }, [locale, ticker]);
+
+  async function runIc(depth: AnalysisDepth) {
     if (!payload || !sliders || !bundle) return;
+    setModeOpen(false);
     setAnalysis(null);
     setAnalyzing(true);
     const controller = new AbortController();
@@ -82,7 +107,7 @@ export function Dashboard() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ financials: payload.financials, sliders, locale }),
+        body: JSON.stringify({ financials: payload.financials, sliders, locale, depth }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -187,16 +212,39 @@ export function Dashboard() {
         <>
           <QuoteBar quote={bundle.financials.quote} />
           <CompanyContextPanel context={payload.context} />
-          {valuationReady ? <ParamSliders value={bundle.sliders} onChange={setSliders} /> : null}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button onClick={runIc} disabled={analyzing} size="lg">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => setModeOpen(true)} disabled={analyzing} size="lg">
               {analyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {analyzing ? t("generating") : t("runIc")}
             </Button>
-            {valuationReady ? (
-              <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
-            ) : null}
           </div>
+          <Dialog open={modeOpen} onOpenChange={setModeOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t("modeTitle")}</DialogTitle>
+                <DialogDescription>{t("pressRunHint")}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col items-start gap-1 p-4 text-left"
+                  onClick={() => runIc("concise")}
+                >
+                  <span className="font-medium">{t("modeConcise")}</span>
+                  <span className="text-muted-foreground text-xs font-normal">{t("modeConciseHint")}</span>
+                </Button>
+                <Button
+                  className="h-auto flex-col items-start gap-1 p-4 text-left"
+                  onClick={() => runIc("professional")}
+                >
+                  <span className="font-medium">{t("modeProfessional")}</span>
+                  <span className="text-primary-foreground/80 text-xs font-normal">
+                    {t("modeProfessionalHint")}
+                  </span>
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Tabs defaultValue="personas">
             <TabsList>
               <TabsTrigger value="personas">{t("tabPersonas")}</TabsTrigger>
@@ -212,8 +260,12 @@ export function Dashboard() {
               />
             </TabsContent>
             <TabsContent value="workbench">
-              {valuationReady ? (
-                <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
+              {valuationReady && sliders ? (
+                <div className="space-y-4">
+                  <ParamSliders value={sliders} onChange={setSliders} />
+                  <ExcelExportButton financials={bundle.financials} sliders={bundle.sliders} />
+                  <ValuationWorkbench dcf={bundle.dcf} lbo={bundle.lbo} vc={bundle.vc} />
+                </div>
               ) : (
                 <p className="text-muted-foreground py-10 text-sm">
                   {t("workbenchHidden")}

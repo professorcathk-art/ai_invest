@@ -21,7 +21,7 @@ export function LanguageToggle() {
         variant={locale === "zh" ? "default" : "ghost"}
         onClick={() => setLocale("zh")}
       >
-        中文
+        繁中
       </Button>
     </div>
   );

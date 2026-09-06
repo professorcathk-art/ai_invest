@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PersonaScorecard, Vote } from "@/lib/engines/types";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 import { majorityVote, NAMES } from "@/lib/llm/personas";
-import { voteLabel, voteTone } from "@/lib/format";
+import { voteTone } from "@/lib/format";
 import { useI18n } from "@/components/i18n/provider";
 
 const ACCENT: Record<string, string> = {
@@ -27,6 +27,8 @@ export function IcDebate({
   booksReady?: boolean;
 }) {
   const { t } = useI18n();
+  const voteText = (vote: Vote) =>
+    vote === "strong_invest" ? t("voteStrong") : vote === "conditional_invest" ? t("voteConditional") : t("votePass");
   const votes = analysis?.narratives.map((n) => n.vote) ?? [];
   const verdict: Vote | null = votes.length >= 4 ? majorityVote(votes) : null;
   const turns = analysis?.debate ?? [];
@@ -80,7 +82,7 @@ export function IcDebate({
                 <div className="text-muted-foreground text-[10px] tracking-[0.14em] uppercase">
                   {t("majority")}
                 </div>
-                <div className={`font-financial text-2xl ${voteTone(verdict)}`}>{voteLabel(verdict)}</div>
+                <div className={`font-financial text-2xl ${voteTone(verdict)}`}>{voteText(verdict)}</div>
               </div>
               <ul className="space-y-2">
                 {analysis?.narratives.map((n) => {
@@ -89,7 +91,7 @@ export function IcDebate({
                     <li key={n.id} className="flex items-center justify-between gap-3 text-sm">
                       <span className="min-w-0 truncate">{name}</span>
                       <Badge variant="outline" className={`max-w-[9rem] shrink-0 ${voteTone(n.vote)}`}>
-                        {voteLabel(n.vote)}
+                        {voteText(n.vote)}
                       </Badge>
                     </li>
                   );

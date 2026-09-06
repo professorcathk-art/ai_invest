@@ -35,16 +35,17 @@ export function formatCompact(
 }
 
 export function formatPrice(value: number | null | undefined, code = "USD"): string {
-  if (value == null || !Number.isFinite(value) || value <= 0) return "—";
-  return currency(value, value >= 1000 ? 0 : 2, code);
+  if (value == null || !Number.isFinite(value) || value === 0) return "—";
+  return currency(value, Math.abs(value) >= 1000 ? 0 : 2, code);
 }
 
-/** Unambiguous for the LLM: "HKD 154.50", never a bare $ that looks like USD. */
+/** Unambiguous for the LLM: "HKD 154.50" or "-HKD 101.99". Never drop the minus. */
 export function formatMoney(value: number | null | undefined, code = "USD"): string {
   if (value == null || !Number.isFinite(value) || value === 0) return "—";
   const iso = moneyCode(code);
   const digits = Math.abs(value) >= 1000 ? 0 : 2;
-  return `${iso} ${Math.abs(value).toLocaleString("en-US", {
+  const sign = value < 0 ? "-" : "";
+  return `${sign}${iso} ${Math.abs(value).toLocaleString("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   })}`;

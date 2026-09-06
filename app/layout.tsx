@@ -18,9 +18,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InvestMouse | 多維度 VC/PE 智能估值與投委會模擬平台",
+  title: "InvestMouse | 多維度股票基本面分析與 AI 投委會模擬平台",
   description:
-    "融合硬核財務模型（DCF / LBO / VC Units）與四位傳奇投資人 AI 審查邏輯，透視任何上市企業的真實價值。",
+    "結合硬核財務模型（DCF / LBO / VC 成長指標）與四大傳奇投資哲學，透視上市企業的真實內在價值。",
 };
 
 export default function RootLayout({

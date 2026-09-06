@@ -1,5 +1,17 @@
 import type { EngineBundle } from "@/lib/engines/types";
+import type { Locale } from "@/lib/i18n/messages";
 import { formatMoney, formatMoneyCompact, formatMultiple, formatPct } from "@/lib/format";
+
+/** Used by every IC memo and debate turn. Edit here to change language. */
+export function languageRule(locale: Locale): string {
+  if (locale !== "zh") return "Write all string fields in English.";
+  return `LANGUAGE (binding):
+- Write EVERY string field in Traditional Chinese 書面語 (現代漢語書面語, 繁體字).
+- This is formal written Chinese as used in HK/TW newspapers, filings, and research notes — NOT spoken Cantonese.
+- Forbidden spoken-Cantonese particles and grammar: 嘅、係、唔、冇、喺、咁、噉、嘅話、我哋、你哋、佢哋、呢個、嗰個、咗、緊、嚟、咪、啲、咁樣、唔係、唔好、點解、邊度.
+- Use written equivalents: 的／之、是、不、沒有、在、如此、我們、這個、那個、了、正在、來、不要、為什麼、哪裡.
+- Keep JSON keys, ticker symbols, and Arabic numerals unchanged.`;
+}
 
 export function metricsBrief(bundle: EngineBundle): string {
   const { financials, dcf, lbo, vc, personas, sliders } = bundle;
@@ -75,24 +87,24 @@ export function metricsBrief(bundle: EngineBundle): string {
 }
 
 export function icSystemPrompt(): string {
-  return `You are the Investment Committee secretary for InvestMouse writing a full IC memo, not a tweet.
+  return `You are the Investment Committee (IC) Secretariat for InvestMouse, producing institutional-grade investment research memos.
 
-HARD RULES
-- Use ONLY the provided engine metrics. Never invent or recalculate numbers.
-- Cite specific figures (IRR, MoIC, DCF price, upside, growth, FCF, leverage) in every section.
-- No one-liners. Each persona argument must be 5–8 sentences.
-- Each thesis bullet is 2–3 sentences.
-- valuationTake is 3–4 sentences on price vs intrinsic value.
-- Debate: 6–8 turns, personas ARGUE against each other with figures. Each turn is 3–5 sentences.
-- chairSummary is 4–6 sentences: majority view, dissent, and what would change the vote.
+CRITICAL ANALYTICAL RULES
+1. NUMERICAL ACCURACY: Use ONLY the provided engine metrics (DCF prices, LBO IRR/MoIC, ROIC, Rule of 40, Leverage). Never invent numbers.
+2. MARKET CATALYST SYNTHESIS: Integrate recent news headlines logically as underlying BUSINESS EVENTS or MARKET CATALYSTS (e.g., earnings misses, macro headwinds, margin pressures). DO NOT copy-paste raw headline title strings verbatim into sentences.
+3. DENSE LOGIC OVER BLOAT: Focus on financial logic and strategic moats. Avoid generic fluff. Structure each persona's output into distinct analytical paragraphs rather than chasing arbitrary sentence counts.
 
-VOICES
-- Buffett: moat, predictability, margin of safety, simple business, owner earnings.
-- Thiel: 10x tech, monopoly, zero-to-one, network effects, why incremental growth is not enough.
-- PE Partner: cash conversion, debt service at 6.5%, paydown, cost-out, multiple expansion vs contraction, bull/bear IRR.
-- Dalio: cyclicality, inflation/rates, sovereign and supply-chain exposure, stress test of the balance sheet.`;
+INVESTOR PERSONA PERSPECTIVES
+- Buffett: Focus on durable business moats, predictability of cash flows, capital allocation discipline, ROIC vs WACC, and Margin of Safety.
+- Thiel: Focus on 10x technological advantage, monopoly potential, network effects, and "Zero to One" scalability vs linear commodity businesses.
+- PE Partner: Focus on debt serviceability (at 6.5% interest), free cash flow conversion, EBITDA margin defense, down-side protection, and 5-year Base/Bear IRR.
+- Dalio: Focus on macroeconomic cycle positioning, inflation/interest rate sensitivity, balance sheet leverage resilience, and sovereign/supply-chain risk exposure.`;
 }
 
 export function icUserPrompt(bundle: EngineBundle): string {
-  return `Write a detailed IC memo for this company from the four personas. Do not summarize in a single sentence.\n\n${metricsBrief(bundle)}`;
+  return `Generate an institutional Investment Committee memo for ${bundle.financials.quote.ticker} (${bundle.financials.quote.name}) using the attached engine metrics. 
+
+Synthesize the numbers and business context into crisp, rigorous arguments for each persona. Do not copy raw headline titles verbatim — digest them into strategic context.
+
+${metricsBrief(bundle)}`;
 }

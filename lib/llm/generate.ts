@@ -1,6 +1,6 @@
 import { deepseek } from "@ai-sdk/deepseek";
 import { generateText } from "ai";
-import { metricsBrief } from "./prompts";
+import { icSystemPrompt, languageRule, metricsBrief } from "./prompts";
 import {
   icAnalysisSchema,
   personaNarrativeSchema,
@@ -55,30 +55,23 @@ async function complete(system: string, prompt: string, maxOutputTokens: number)
   return text;
 }
 
-function languageRule(locale: Locale): string {
-  return locale === "zh"
-    ? "Write EVERY string field in Traditional Chinese (繁體中文，香港／台灣用語). Keep JSON keys, ticker symbols, and Arabic numerals unchanged."
-    : "Write all string fields in English.";
-}
-
 function depthRule(depth: AnalysisDepth): { rule: string; tokens: number } {
   if (depth === "professional") {
     return {
       tokens: 1800,
       rule: `PROFESSIONAL MODE:
-- argument = 8–12 sentences. valuationTake = 5–7 sentences. Each thesis bullet = 2–3 sentences that include a number.
-- First sentence must name the company, ticker, and spot price from the JSON.
-- Quote at least FOUR engine figures with the exact printed values (price, DCF, IRR, margins, FCF years, leverage, etc.).
-- Quote at least ONE headline or filing by its exact title from the supplied sources. If none exist, write "no usable headline was supplied".
-- Do not write generic lines such as "the moat looks durable" unless you attach a number that supports or kills that claim.
+- Dense, high-conviction paragraphs. Open with the company, ticker, and spot price from the JSON.
+- Cite at least FOUR engine figures with the exact printed values (price, DCF, IRR, margins, FCF, leverage).
+- Synthesize at least one supplied headline as a BUSINESS EVENT or MARKET CATALYST. Never paste the raw title string.
+- No generic lines such as "the moat looks durable" unless a number supports or kills that claim.
 - If a metric is "—" or null, say the books are incomplete for that item.`,
     };
   }
   return {
     tokens: 1100,
     rule: `CONCISE MODE:
-- argument = 4–6 sentences. valuationTake = 2–3 sentences. Each thesis bullet = 1–2 sentences.
-- Still cite at least three engine figures with exact values. No slogans without numbers.`,
+- Dense paragraphs, not sentence-count padding. Still cite at least three engine figures with exact values.
+- Digest headlines into catalysts. Never dump raw headline titles.`,
   };
 }
 
@@ -93,19 +86,23 @@ export async function generatePersonaNarrative(
   const { rule, tokens } = depthRule(depth);
   const text = await complete(
     `You are ${persona.name} sitting in a live Investment Committee.
+${icSystemPrompt()}
+
+YOUR LENS
 ${persona.lens}
 
 HARD RULES:
 - Use ONLY the supplied engine JSON and public context. Never invent financial figures, headlines, or filings.
-- SYNTHESIS: argument must weave business model + named headlines + engine figures. Never recap numbers without saying what they mean for the vote.
+- SYNTHESIS: weave business model + market catalysts (digested from headlines) + engine figures. Never recap numbers without saying what they mean for the vote.
 - Follow your lens's 3-paragraph structure inside argument (use \\n\\n between paragraphs).
-- CURRENCY: company.reportingCurrency is the only money unit. Quote prices as "HKD 154.50" or "USD 190", never convert, and never write USD / 美元 / $ unless reportingCurrency is USD. Hong Kong listings (.HK) are HKD.
+- Never copy-paste raw headline title strings into prose.
+- CURRENCY: company.reportingCurrency is the only money unit. Quote prices as "HKD 154.50", "-HKD 101.99", or "USD 190". Keep the minus on negative DCF / EV. Never convert, and never write USD / 美元 / $ unless reportingCurrency is USD. Hong Kong listings (.HK) are HKD.
 - ${rule}
 - ${languageRule(locale)}
 - Return ONLY a JSON object with keys: id, vote ("strong_invest"|"conditional_invest"|"pass"), conviction (0-100 integer), thesis (3-5 strings), valuationTake, argument, catalysts (2-4), risks (2-4).
 - vote is YOUR IC recommendation. conviction is how strongly you hold that vote.
 - id must be "${persona.id}".`,
-    `Company metrics (deterministic engines — quote these):\n${metricsBrief(bundle)}\n\nPublic context (cite titles, do not invent):\n${contextBrief(ctx)}`,
+    `Company metrics (deterministic engines — quote these):\n${metricsBrief(bundle)}\n\nPublic context (digest headlines as events/catalysts; do not invent):\n${contextBrief(ctx)}`,
     tokens,
   );
   const parsed = extractJson(text);
@@ -139,7 +136,10 @@ export async function generateDebate(
         `${n.id.toUpperCase()} vote=${n.vote} verdict=${votes[n.id]} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
     )
     .join("\n\n");
-  const length = depth === "professional" ? "Each turn is 4–6 sentences." : "Each turn is 3–4 sentences.";
+  const length =
+    depth === "professional"
+      ? "Each turn is a dense paragraph with figures — no sentence-count padding."
+      : "Each turn is a tight paragraph with at least one engine figure.";
   const text = await complete(
     `You are the IC secretary recording a LIVE argument, not four speeches.
 VOTING_RESULTS (binding — never invent or flip these votes):
@@ -162,7 +162,7 @@ ${debateTurnGuide(votes)}
 FORBIDDEN: parallel monologues, "I agree with the group", a turn that does not address someone else, or fake disagreement on a shared PASS/INVEST verdict.
 CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD.
 ${length}
-Then a 4–6 sentence chairSummary that states who won, who dissented, and what number would flip the majority. The summary must match VOTING_RESULTS.
+Then a dense chairSummary: who won, who dissented, and what number would flip the majority. The summary must match VOTING_RESULTS. Do not paste raw headline titles.
 ${languageRule(locale)}
 Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
     `Persona memos:\n${digest}\n\nMetrics:\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,

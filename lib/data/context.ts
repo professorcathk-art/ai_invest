@@ -372,8 +372,10 @@ export function contextBrief(ctx: CompanyContext): string {
   return [
     ctx.businessSummary ? `Business overview:\n${ctx.businessSummary}` : "Business overview: not available.",
     facts ? `Key facts:\n${facts}` : "",
-    headlines ? `Recent company headlines:\n${headlines}` : "Recent headlines: none available.",
-    refs ? `Primary public sources (cite these, do not invent filings):\n${refs}` : "",
+    headlines
+      ? `Recent company headlines (digest into business events / market catalysts; do not paste titles verbatim):\n${headlines}`
+      : "Recent headlines: none available.",
+    refs ? `Primary public sources (use as background; do not invent filings or paste titles verbatim):\n${refs}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

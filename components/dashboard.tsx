@@ -105,7 +105,7 @@ export function Dashboard() {
     setAnalysis(null);
     setAnalyzing(true);
     const controller = new AbortController();
-    const abortTimer = window.setTimeout(() => controller.abort(), 55_000);
+    const abortTimer = window.setTimeout(() => controller.abort(), 58_000);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",

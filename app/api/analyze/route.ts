@@ -2,13 +2,15 @@ import { runEngines } from "@/lib/engines";
 import { writeAnalysis } from "@/lib/data/cache";
 import { fetchCompanyContext } from "@/lib/data/context";
 import { generateDebate, generatePersonaNarrative, PERSONAS } from "@/lib/llm/generate";
+import { fallbackDebate } from "@/lib/llm/debate";
 import { readEnginePayload } from "@/lib/api/request";
 import type { IcAnalysis } from "@/lib/llm/schemas";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-const DEEPSEEK_BUDGET_MS = 50_000;
+const PERSONA_BUDGET_MS = 36_000;
+const DEBATE_BUDGET_MS = 12_000;
 const PERSIST_BUDGET_MS = 2_000;
 
 function withBudget<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -68,6 +70,7 @@ export async function POST(request: Request) {
         const ctx = await fetchCompanyContext(bundle.financials.quote.ticker, parsed.locale);
         send({ type: "context", context: ctx });
 
+        const started = Date.now();
         const results = await withBudget(
           Promise.allSettled(
             PERSONAS.map(async (persona) => {
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
               return narrative;
             }),
           ),
-          DEEPSEEK_BUDGET_MS,
+          PERSONA_BUDGET_MS,
           "DeepSeek personas",
         );
 
@@ -105,16 +108,21 @@ export async function POST(request: Request) {
         }
 
         let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
+        const leftover = Math.max(8_000, DEBATE_BUDGET_MS - Math.max(0, Date.now() - started - PERSONA_BUDGET_MS));
         try {
-          debatePart = await generateDebate(narratives, bundle, ctx, parsed.locale, parsed.depth);
+          debatePart = await withBudget(
+            generateDebate(
+              narratives,
+              bundle,
+              ctx,
+              parsed.locale,
+              leftover < 16_000 ? "concise" : parsed.depth,
+            ),
+            leftover,
+            "DeepSeek debate",
+          );
         } catch {
-          debatePart = {
-            debate: [],
-            chairSummary:
-              parsed.locale === "zh"
-                ? "四份備忘錄已完成，辯論紀錄逾時。如需完整辯駁，請再開始一次委員會審閱。"
-                : "The four memos are done; the debate transcript timed out. Run the review again if you need the argument.",
-          };
+          debatePart = fallbackDebate(narratives, parsed.locale);
         }
         const analysis = {
           narratives,

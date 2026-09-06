@@ -85,7 +85,7 @@ export function assembleYears(raw: RawYear[], taxFallback: number, warnings: str
       fcf: num(r.freeCashFlow),
       roic: opt(r.roic),
     }))
-    .filter((y) => y.year > 1990)
+    .filter((y) => y.year > 1990 && (y.revenue > 0 || Math.abs(y.ebit) > 0 || Math.abs(y.netIncome) > 0))
     .sort((a, b) => a.year - b.year)
     .slice(-5);
 
@@ -173,13 +173,18 @@ export function isUsableFinancials(financials: CompanyFinancials): boolean {
   return complete.length >= 3;
 }
 
-/** True only when engines produced a real price — never treat $0 / −100% as a result. */
+/** Books + a computed DCF (negative equity value is a real result for cash-burning names). */
 export function isUsableValuation(
   financials: CompanyFinancials,
   dcf: { impliedPriceGordon: number; marketPrice: number; enterpriseValueGordon: number },
 ): boolean {
   if (!isUsableFinancials(financials)) return false;
-  return dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 && dcf.enterpriseValueGordon > 0;
+  return (
+    dcf.marketPrice > 0 &&
+    Number.isFinite(dcf.impliedPriceGordon) &&
+    dcf.impliedPriceGordon !== 0 &&
+    Number.isFinite(dcf.enterpriseValueGordon)
+  );
 }
 
 export function finalizeCompany(

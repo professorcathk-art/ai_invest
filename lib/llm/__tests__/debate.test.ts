@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   debateTurnGuide,
   debateVerdict,
+  fallbackDebate,
   pairingRule,
   sameVerdictFamily,
   votingResults,
@@ -57,5 +58,20 @@ describe("debate vote pairing", () => {
     expect(guide).toContain("MUST agree");
     expect(guide).toContain("dalio replies to pe");
     expect(guide).toContain("MUST challenge");
+  });
+
+  it("stitches six debate turns from finished memos without inventing figures", () => {
+    const part = fallbackDebate(
+      [
+        narrative("buffett", "pass"),
+        narrative("thiel", "pass"),
+        narrative("pe", "pass"),
+        narrative("dalio", "pass"),
+      ],
+      "zh",
+    );
+    expect(part.debate).toHaveLength(6);
+    expect(part.debate[1]?.text).toContain("同意");
+    expect(part.chairSummary).not.toMatch(/逾時|timeout/i);
   });
 });

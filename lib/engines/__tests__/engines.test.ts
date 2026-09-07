@@ -161,7 +161,8 @@ describe("bundle", () => {
     const analysis = fallbackAnalysis(bundle);
     const parsed = icAnalysisSchema.parse(analysis);
     expect(parsed.narratives).toHaveLength(4);
-    expect(parsed.debate).toHaveLength(4);
+    expect(parsed.debate.length).toBeGreaterThanOrEqual(3);
+    expect(parsed.debate.length).toBeLessThanOrEqual(8);
     expect(parsed.narratives.every((n) => n.argument.length > 200)).toBe(true);
   });
 });

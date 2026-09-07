@@ -1,5 +1,6 @@
 import type { EngineBundle, Vote } from "@/lib/engines/types";
 import { formatCompact, formatMoney, formatMultiple, formatPct } from "@/lib/format";
+import { fallbackDebate } from "./debate";
 import type { IcAnalysis } from "./schemas";
 
 const NAMES = {
@@ -30,8 +31,7 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
   const wacc = formatPct(sliders.wacc);
   const ev = formatCompact(financials.quote.enterpriseValue, 1, ccy);
 
-  return {
-    narratives: [
+  const narratives: IcAnalysis["narratives"] = [
       {
         id: "buffett",
         vote: bundle.personas.find((p) => p.id === "buffett")?.vote ?? "pass",
@@ -112,26 +112,10 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
           "Supply-chain or sovereign concentration is not in the three-statement model.",
         ],
       },
-    ],
-    debate: [
-      {
-        speaker: "buffett",
-        text: `The binding question is the moat and owner earnings, not a repeated vote. FCF margin is ${fcfm} and ROIC is ${roic}. If that is not a wonderful business, ${dcfPrice} versus ${price} is a value trap.`,
-      },
-      {
-        speaker: "thiel",
-        text: `Warren's cash test misses the monopoly cut. Growth is ${yoy} and gross margin ${gm}. If this is incremental commodity tech, cheapness is not a strategy.`,
-      },
-      {
-        speaker: "pe",
-        text: `I will not restate growth. Supply chain and leverage decide bankability: ${formatPct(sliders.debtPct)} debt on entry EV, base IRR ${irr} / ${moic}. A 15% EBITDA miss must still service 6.5%.`,
-      },
-      {
-        speaker: "dalio",
-        text: `Operations do not survive a closed credit window. Bear IRR ${bearIrr} with leverage ${nd} is a cycle problem. I vote the downturn, not the base case.`,
-      },
-    ],
-    chairSummary: `Majority is a ${bundle.personas.filter((p) => p.vote !== "pass").length >= 2 ? "conditional" : "cautious"} posture. A flip requires a wider margin of safety, a real 10x, cleaner conversion, or a stronger balance sheet.`,
+  ];
+  return {
+    narratives,
+    ...fallbackDebate(narratives),
   };
 }
 

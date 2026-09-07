@@ -7,11 +7,19 @@ import {
   type IcAnalysis,
 } from "./schemas";
 import { PERSONA_LENSES } from "./lenses";
-import { debateSystemPrompt, votingResults } from "./debate";
+import {
+  debateMode,
+  debateSystemPrompt,
+  debateTurnBounds,
+  isValidDebateLength,
+  normalizeDebateOutput,
+  speakerSequence,
+  votingResults,
+} from "./debate";
 import type { EngineBundle } from "@/lib/engines/types";
 import { contextBrief, type CompanyContext } from "@/lib/data/context";
 import type { AnalysisDepth, Locale } from "@/lib/i18n/messages";
-import { z } from "zod";
+import type { z } from "zod";
 
 Object.defineProperty(globalThis, "AI_SDK_LOG_WARNINGS", {
   value: false,
@@ -38,14 +46,19 @@ function modelId(): string {
   return process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
 }
 
-async function complete(system: string, prompt: string, maxOutputTokens: number): Promise<string> {
+async function complete(
+  system: string,
+  prompt: string,
+  maxOutputTokens: number,
+  temperature = 0.35,
+): Promise<string> {
   const { text } = await generateText({
     model: deepseek(modelId()),
     system,
     prompt,
     maxRetries: 0,
     maxOutputTokens,
-    temperature: 0.35,
+    temperature,
     providerOptions: {
       deepseek: {
         thinking: { type: "disabled" },
@@ -123,6 +136,11 @@ HARD RULES:
 
 const debateSchema = icAnalysisSchema.pick({ debate: true, chairSummary: true });
 
+function debateTokens(mode: ReturnType<typeof debateMode>, depth: AnalysisDepth): number {
+  if (mode === "split") return depth === "professional" ? 2200 : 1700;
+  return depth === "professional" ? 1100 : 800;
+}
+
 export async function generateDebate(
   narratives: IcAnalysis["narratives"],
   bundle: EngineBundle,
@@ -131,21 +149,41 @@ export async function generateDebate(
   depth: AnalysisDepth = "concise",
 ): Promise<Pick<IcAnalysis, "debate" | "chairSummary">> {
   const votes = votingResults(narratives);
+  const mode = debateMode(votes);
+  const { target, min, max } = debateTurnBounds(mode);
+  const sequence = speakerSequence(narratives, votes, target);
   const digest = narratives
     .map(
       (n) =>
-        `${n.id.toUpperCase()} vote=${n.vote} verdict=${votes[n.id]} conviction=${n.conviction}: ${n.argument}\nValuation: ${n.valuationTake}`,
+        `${n.id.toUpperCase()} vote=${n.vote} verdict=${votes[n.id]} conviction=${n.conviction}\nThesis: ${n.thesis.join(" | ")}\nArgument: ${n.argument}\nValuation: ${n.valuationTake}\nCatalysts: ${n.catalysts.join("; ")}\nRisks: ${n.risks.join("; ")}`,
     )
     .join("\n\n");
   const text = await complete(
-    `${debateSystemPrompt(votes)}
+    `${debateSystemPrompt(votes, sequence)}
 CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD. Never paste raw headline titles.
 ${languageRule(locale)}
 Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
-    `Persona memos:\n${digest}\n\nMetrics:\n${metricsBrief(bundle)}\n\nPublic context:\n${contextBrief(ctx)}`,
-    depth === "professional" ? 1200 : 900,
+    `SPEAKER_SEQUENCE: ${sequence.join(" → ")}
+TURN_COUNT: exactly ${target} (allowed ${min}-${max}).
+
+FOUR_NARRATIVES:
+${digest}
+
+FINANCIALS_AND_VALUATION_MODELS:
+${metricsBrief(bundle)}
+
+PROPRIETARY_INSIGHTS (CCASS / 13F / buybacks / headlines — use only these figures; do not invent holdings):
+${contextBrief(ctx)}`,
+    debateTokens(mode, depth),
+    0.45,
   );
-  return debateSchema.parse(extractJson(text));
+  const normalized = normalizeDebateOutput(extractJson(text), votes);
+  if (!isValidDebateLength(normalized.debate.length, mode) || !normalized.chairSummary) {
+    throw new Error(
+      `Debate output failed validation (${normalized.debate.length} turns, mode=${mode})`,
+    );
+  }
+  return debateSchema.parse(normalized);
 }
 
 export async function generateIcAnalysis(

@@ -44,7 +44,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Timeline({ events }: { events: CatalystEvent[] }) {
   const { t } = useI18n();
   return (
-    <ol className="relative space-y-4 border-l border-tech/30 pl-5">
+    <ol className="relative space-y-5 border-l border-tech/30 pb-1 pl-5">
       {events.map((event) => {
         const type = TYPE_COPY[event.type];
         const impact = IMPACT_TONE[event.impact];
@@ -59,7 +59,7 @@ function Timeline({ events }: { events: CatalystEvent[] }) {
               <span className="text-muted-foreground font-financial text-xs">{event.date ?? "—"}</span>
             </div>
             <p className="mt-1.5 text-sm leading-relaxed text-pretty">{event.title}</p>
-            {event.detail && event.detail !== event.title ? (
+            {event.detail && event.detail !== event.title && !/日期來自 Yahoo|company calendar, not estimated/i.test(event.detail) ? (
               <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">{event.detail}</p>
             ) : null}
             {event.source || event.sourceUrl ? (
@@ -133,7 +133,7 @@ export function DividendsCatalystsDashboard({
         <CardHeader>
           <CardTitle className="text-sm">{t("divTimeline")}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pb-2">
           {pack.catalysts.length === 0 ? (
             <p className="text-muted-foreground text-sm">—</p>
           ) : (

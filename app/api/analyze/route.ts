@@ -13,7 +13,7 @@ export const maxDuration = 60;
 export const runtime = "nodejs";
 
 const PERSONA_BUDGET_MS = 36_000;
-const DEBATE_BUDGET_MS = 12_000;
+const DEBATE_BUDGET_MS = 16_000;
 const PERSIST_BUDGET_MS = 2_000;
 
 function withBudget<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
         }
 
         let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
-        const leftover = Math.max(8_000, DEBATE_BUDGET_MS - Math.max(0, Date.now() - started - PERSONA_BUDGET_MS));
+        const leftover = Math.max(10_000, DEBATE_BUDGET_MS - Math.max(0, Date.now() - started - PERSONA_BUDGET_MS));
         try {
           debatePart = await withBudget(
             generateDebate(

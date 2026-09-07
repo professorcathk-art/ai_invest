@@ -24,7 +24,7 @@ export const smartMoneyInsightSchema = z.object({
 
 export const icAnalysisSchema = z.object({
   narratives: z.array(personaNarrativeSchema).length(4),
-  debate: z.array(debateTurnSchema).min(4).max(4),
+  debate: z.array(debateTurnSchema).min(3).max(8),
   chairSummary: z.string(),
   smartMoneyInsight: smartMoneyInsightSchema.optional(),
 });

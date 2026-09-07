@@ -286,20 +286,35 @@ export function Dashboard() {
           </Dialog>
           <Tabs defaultValue="personas" className="min-w-0">
             <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:overflow-visible sm:px-0">
-              <TabsList className="bg-muted flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl p-1.5 sm:w-fit sm:flex-wrap">
-                <TabsTrigger value="personas" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+              <TabsList className="bg-muted flex h-11 w-max min-w-full flex-nowrap items-center justify-start gap-1 rounded-xl p-1 group-data-horizontal/tabs:h-11 sm:w-fit sm:flex-wrap">
+                <TabsTrigger
+                  value="personas"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
                   {t("tabPersonas")}
                 </TabsTrigger>
-                <TabsTrigger value="workbench" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                <TabsTrigger
+                  value="workbench"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
                   {t("tabWorkbench")}
                 </TabsTrigger>
-                <TabsTrigger value="debate" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                <TabsTrigger
+                  value="debate"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
                   {t("tabDebate")}
                 </TabsTrigger>
-                <TabsTrigger value="ownership" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                <TabsTrigger
+                  value="ownership"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
                   {t("tabOwnership")}
                 </TabsTrigger>
-                <TabsTrigger value="catalysts" className="h-auto flex-none px-3 py-2 text-xs whitespace-nowrap sm:text-sm">
+                <TabsTrigger
+                  value="catalysts"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
                   {t("tabCatalysts")}
                 </TabsTrigger>
               </TabsList>

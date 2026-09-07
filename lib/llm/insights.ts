@@ -183,10 +183,7 @@ export async function synthesizeCatalysts(input: {
           input.locale === "zh"
             ? `${input.name || input.ticker} 已排期的業績公布`
             : `${input.name || input.ticker} scheduled earnings release`,
-        detail:
-          input.locale === "zh"
-            ? "日期來自 Yahoo Finance 公司行事曆，並非推估。"
-            : "Date taken from the Yahoo Finance company calendar, not estimated.",
+        detail: null,
         impact: "volatility",
         source: "Yahoo Finance",
         sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(input.ticker)}/calendar`,

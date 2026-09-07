@@ -117,6 +117,67 @@ export function parseOwnershipRecord(input: unknown): OwnershipSnapshot | { erro
   return snapshot;
 }
 
+/** Published so Workbuddy / Codex can adjust a rejected payload instead of guessing. */
+export function ownershipIngestStandard() {
+  return {
+    endpoint: "POST /api/ownership/ingest",
+    auth: "Authorization: Bearer $RESEARCH_INGEST_TOKEN",
+    body: "one record, an array, or { records: [...] }",
+    hk: {
+      required: ["ticker", "as_of_date", "signal_type", "top_buyers or top_sellers with real CCASS names"],
+      fields: {
+        ticker: "0700.HK",
+        as_of_date: "YYYY-MM-DD from the HKEX shareholding date",
+        market_type: "HK",
+        signal_type: "INSTITUTIONAL_ACCUMULATION | RETAIL_TRAP | NEUTRAL",
+        institutional_pct: "sum of institutional CCASS % (optional if names present)",
+        retail_pct: "sum of retail-broker CCASS % (optional if names present)",
+        top_buyers: [{ name: "CITIBANK N.A.", change_30d: "+1.22%" }],
+        top_sellers: [{ name: "THE HONGKONG AND SHANGHAI BANKING", change_30d: "-0.70%" }],
+      },
+      forbidden: ["invented % with empty brokers", "Insiders / Retail Brokers / Corporate Buyback as names", "INSIDER_BULLISH on .HK"],
+      source: "https://www3.hkexnews.hk/sdw/search/searchsdw.aspx",
+    },
+    us: {
+      required: ["ticker", "as_of_date", "signal_type", "at least one 13F/Form 4 field or named holders"],
+      fields: {
+        ticker: "AAPL",
+        as_of_date: "YYYY-MM-DD",
+        market_type: "US",
+        signal_type: "INSIDER_BULLISH | INSIDER_SELLING | NEUTRAL",
+        inst_holding_pct: 68.5,
+        insider_holding_pct: 0.07,
+        short_interest_pct: 0.8,
+        net_insider_usd: 12000000,
+        top_buyers: [{ name: "Vanguard Group Inc", change_30d: "+0.40%" }],
+      },
+      forbidden: ["institutional_pct/retail_pct only", "insider signal without insider_holding_pct or net_insider_usd"],
+      source: "Yahoo quoteSummary modules defaultKeyStatistics, majorHoldersBreakdown, institutionOwnership, insiderTransactions",
+    },
+    example_ok_hk: {
+      ticker: "0700.HK",
+      as_of_date: "2026-09-04",
+      market_type: "HK",
+      signal_type: "NEUTRAL",
+      institutional_pct: 71.01,
+      retail_pct: 1.86,
+      top_buyers: [{ name: "CITIBANK N.A.", change_30d: "+1.22%" }],
+      top_sellers: [{ name: "BOCI SECURITIES LTD", change_30d: "-0.21%" }],
+    },
+    example_ok_us: {
+      ticker: "AAPL",
+      as_of_date: "2026-06-30",
+      market_type: "US",
+      signal_type: "NEUTRAL",
+      inst_holding_pct: 68.5,
+      insider_holding_pct: 0.07,
+      short_interest_pct: 0.8,
+      net_insider_usd: -2500000,
+      top_buyers: [{ name: "Vanguard Group Inc", change_30d: "+0.40%" }],
+    },
+  };
+}
+
 /** Agents writing estimates get a concrete reject reason — same rules as the Postgres trigger. */
 export function ownershipQualityError(row: OwnershipSnapshot): string | null {
   const named = [...namedParties(row.top_buyers), ...namedParties(row.top_sellers)];

@@ -11,7 +11,7 @@ import { z } from "zod";
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
-const narrativesSchema = z.array(personaNarrativeSchema).length(4);
+const narrativesSchema = z.array(personaNarrativeSchema).min(2).max(6);
 
 export async function POST(request: Request) {
   const parsed = await readEnginePayload(request);
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     narratives = narrativesSchema.parse(parsed.narratives);
   } catch {
-    return Response.json({ error: "Four persona narratives are required." }, { status: 400 });
+    return Response.json({ error: "At least two persona narratives are required." }, { status: 400 });
   }
 
   const bundle = runEngines(parsed.financials, parsed.sliders);

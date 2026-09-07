@@ -1,9 +1,11 @@
 import { runEngines } from "@/lib/engines";
 import { writeAnalysis } from "@/lib/data/cache";
+import { readCachedAnalysis, writeCachedAnalysis } from "@/lib/data/analysis-cache";
 import { fetchCompanyContext } from "@/lib/data/context";
+import { buildBusinessBreakdown, segmentBrief } from "@/lib/data/segments";
 import { listOwnership } from "@/lib/data/ownership-store";
 import { ownershipLlmBrief } from "@/lib/data/ownership";
-import { generateDebate, generatePersonaNarrative, PERSONAS } from "@/lib/llm/generate";
+import { generateDebate, generatePersonaNarrative, personasFor } from "@/lib/llm/generate";
 import { fallbackDebate } from "@/lib/llm/debate";
 import { fallbackSmartMoneyInsight, generateSmartMoneyInsight } from "@/lib/llm/insights";
 import { readEnginePayload } from "@/lib/api/request";
@@ -38,16 +40,28 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error }, { status: parsed.status });
   }
   const bundle = runEngines(parsed.financials, parsed.sliders);
+  const selected = parsed.selectedPersonas;
+  const roster = personasFor(selected);
 
   const persist = async (analysis: IcAnalysis) => {
     try {
       await withBudget(
-        writeAnalysis({
-          ticker: bundle.financials.quote.ticker,
-          assumptions: bundle.sliders,
-          engines: { dcf: bundle.dcf, lbo: bundle.lbo, vc: bundle.vc },
-          personas: { scorecards: bundle.personas, analysis, provider: "deepseek" },
-        }),
+        Promise.all([
+          writeAnalysis({
+            ticker: bundle.financials.quote.ticker,
+            assumptions: bundle.sliders,
+            engines: { dcf: bundle.dcf, lbo: bundle.lbo, vc: bundle.vc },
+            personas: { scorecards: bundle.personas, analysis, provider: "deepseek" },
+          }),
+          writeCachedAnalysis({
+            ticker: bundle.financials.quote.ticker,
+            mode: parsed.depth,
+            personas: selected,
+            sliders: bundle.sliders,
+            locale: parsed.locale,
+            analysis,
+          }),
+        ]),
         PERSIST_BUDGET_MS,
         "Supabase persist",
       );
@@ -71,12 +85,39 @@ export async function POST(request: Request) {
       };
       try {
         const ticker = bundle.financials.quote.ticker;
+        const cached = await readCachedAnalysis({
+          ticker,
+          mode: parsed.depth,
+          personas: selected,
+          sliders: bundle.sliders,
+          locale: parsed.locale,
+        });
+
         const [ctx, snapshots] = await Promise.all([
           fetchCompanyContext(ticker, parsed.locale),
           listOwnership(ticker, 30).catch(() => []),
         ]);
         ctx.ownershipBrief = ownershipLlmBrief(snapshots);
-        send({ type: "context", context: ctx });
+        const breakdown = await buildBusinessBreakdown(ticker, ctx).catch(() => null);
+        if (breakdown) ctx.segmentBrief = segmentBrief(breakdown, parsed.locale);
+        send({ type: "context", context: ctx, business: breakdown });
+
+        if (cached) {
+          send({
+            type: "cached",
+            analysis: cached.analysis,
+            cachedAt: cached.cachedAt,
+            fromCache: true,
+          });
+          send({
+            type: "complete",
+            analysis: cached.analysis,
+            provider: "cache",
+            fromCache: true,
+            cachedAt: cached.cachedAt,
+          });
+          return;
+        }
 
         const insightTask = withBudget(
           generateSmartMoneyInsight(snapshots, parsed.locale),
@@ -92,7 +133,7 @@ export async function POST(request: Request) {
         const started = Date.now();
         const results = await withBudget(
           Promise.allSettled(
-            PERSONAS.map(async (persona) => {
+            roster.map(async (persona) => {
               const narrative = await generatePersonaNarrative(
                 persona.id,
                 bundle,
@@ -108,27 +149,30 @@ export async function POST(request: Request) {
           "DeepSeek personas",
         );
 
-        const narratives = PERSONAS.map((p) => {
-          const hit = results.find(
-            (r) => r.status === "fulfilled" && r.value.id === p.id,
-          );
-          return hit && hit.status === "fulfilled" ? hit.value : null;
-        }).filter((n): n is NonNullable<typeof n> => Boolean(n));
+        const narratives = roster
+          .map((p) => {
+            const hit = results.find((r) => r.status === "fulfilled" && r.value.id === p.id);
+            return hit && hit.status === "fulfilled" ? hit.value : null;
+          })
+          .filter((n): n is NonNullable<typeof n> => Boolean(n));
 
-        if (narratives.length < 4) {
+        if (narratives.length < roster.length) {
           const reasons = results
             .filter((r): r is PromiseRejectedResult => r.status === "rejected")
             .map((r) => (r.reason instanceof Error ? r.reason.message : "failed"));
           await insightTask.catch(() => null);
           send({
             type: "error",
-            error: `DeepSeek persona generation failed (${narratives.length}/4). ${reasons[0] ?? ""}`,
+            error: `DeepSeek persona generation failed (${narratives.length}/${roster.length}). ${reasons[0] ?? ""}`,
           });
           return;
         }
 
         let debatePart: Pick<IcAnalysis, "debate" | "chairSummary">;
-        const leftover = Math.max(10_000, DEBATE_BUDGET_MS - Math.max(0, Date.now() - started - PERSONA_BUDGET_MS));
+        const leftover = Math.max(
+          10_000,
+          DEBATE_BUDGET_MS - Math.max(0, Date.now() - started - PERSONA_BUDGET_MS),
+        );
         try {
           debatePart = await withBudget(
             generateDebate(
@@ -152,7 +196,7 @@ export async function POST(request: Request) {
           smartMoneyInsight,
         } satisfies IcAnalysis;
         await persist(analysis);
-        send({ type: "complete", analysis, provider: "deepseek" });
+        send({ type: "complete", analysis, provider: "deepseek", fromCache: false });
       } catch (error) {
         send({
           type: "error",

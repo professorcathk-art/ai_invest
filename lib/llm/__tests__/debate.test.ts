@@ -146,6 +146,25 @@ describe("prompt and output validation", () => {
   });
 });
 
+describe("six-seat committee", () => {
+  it("votes and sequences only the selected speakers, including Trump and Musk", () => {
+    const narratives = [
+      narrative("buffett", "pass", 70),
+      narrative("trump", "strong_invest", 90),
+      narrative("musk", "pass", 60),
+    ];
+    const votes = votingResults(narratives);
+    expect(Object.keys(votes).sort()).toEqual(["buffett", "musk", "trump"]);
+    expect(debateMode(votes)).toBe("split");
+    const seq = speakerSequence(narratives, votes, 6);
+    expect(seq).toHaveLength(6);
+    expect(new Set(seq).size).toBeLessThanOrEqual(3);
+    const part = fallbackDebate(narratives, "en");
+    expect(part.debate.some((turn) => turn.speaker === "trump")).toBe(true);
+    expect(part.debate.every((turn) => ["buffett", "trump", "musk"].includes(turn.speaker))).toBe(true);
+  });
+});
+
 describe("fallback debate", () => {
   it("closes a 0700.HK unanimous PASS in three turns of written Chinese", () => {
     const part = fallbackDebate(tencentUnanimousPass(), "zh");

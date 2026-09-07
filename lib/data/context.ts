@@ -26,6 +26,7 @@ export interface CompanyContext {
   highlights: CompanyHighlight[];
   references: SourceRef[];
   ownershipBrief?: string;
+  segmentBrief?: string;
 }
 
 export const emptyContext = (): CompanyContext => ({
@@ -209,6 +210,18 @@ function filingLinks(ticker: string, name: string): SourceRef[] {
   return refs;
 }
 
+export async function fetchPublicHeadlines(symbol: string, locale: Locale = "en"): Promise<NewsItem[]> {
+  const ticker = normalizeSymbol(symbol);
+  const [yahoo, google] = await Promise.all([yahooRssNews(ticker), googleNewsRss(ticker, ticker, locale)]);
+  const seen = new Set<string>();
+  return [...yahoo, ...google].filter((item) => {
+    const key = item.title.toLowerCase();
+    if (!item.title || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 6);
+}
+
 export async function fetchCompanyContext(symbol: string, locale: Locale = "en"): Promise<CompanyContext> {
   const ticker = normalizeSymbol(symbol);
   const news: NewsItem[] = [];
@@ -376,6 +389,9 @@ export function contextBrief(ctx: CompanyContext): string {
     headlines
       ? `Recent company headlines (digest into business events / market catalysts; do not paste titles verbatim):\n${headlines}`
       : "Recent headlines: none available.",
+    ctx.segmentBrief
+      ? `Sourced business segments / geography (cite these; never invent a mix):\n${ctx.segmentBrief}`
+      : "Sourced business segments: none. Do not invent Gaming vs Cloud vs Ads (or any other) splits.",
     ctx.ownershipBrief
       ? `Ownership / CCASS / 13F (use these figures only; do not invent holdings):\n${ctx.ownershipBrief}`
       : "",

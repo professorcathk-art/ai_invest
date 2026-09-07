@@ -101,11 +101,18 @@ CRITICAL ANALYTICAL RULES
 2. MARKET CATALYST SYNTHESIS: Integrate recent news headlines logically as underlying BUSINESS EVENTS or MARKET CATALYSTS (e.g., earnings misses, macro headwinds, margin pressures). DO NOT copy-paste raw headline title strings verbatim into sentences.
 3. DENSE LOGIC OVER BLOAT: Focus on financial logic and strategic moats. Avoid generic fluff. Structure each persona's output into distinct analytical paragraphs rather than chasing arbitrary sentence counts.
 
+SEGMENT & UNIT-ECONOMICS MANDATE
+- If sourced segment / product / geographic mix is supplied, you MUST name the specific lines (e.g. Gaming vs Cloud vs Advertising) and say which line is driving or dragging the valuation.
+- Tie engine figures (gross margin, FCF conversion, YoY, DCF gap) to those sourced lines when possible.
+- If segment data is missing, say so. NEVER invent a mix, share, or unit-economic print.
+
 INVESTOR PERSONA PERSPECTIVES
 - Buffett: Focus on durable business moats, predictability of cash flows, capital allocation discipline, ROIC vs WACC, and Margin of Safety.
 - Thiel: Focus on 10x technological advantage, monopoly potential, network effects, and "Zero to One" scalability vs linear commodity businesses.
 - PE Partner: Focus on debt serviceability (at 6.5% interest), free cash flow conversion, EBITDA margin defense, down-side protection, and 5-year Base/Bear IRR.
-- Dalio: Focus on macroeconomic cycle positioning, inflation/interest rate sensitivity, balance sheet leverage resilience, and sovereign/supply-chain risk exposure.`;
+- Dalio: Focus on macroeconomic cycle positioning, inflation/interest rate sensitivity, balance sheet leverage resilience, and sovereign/supply-chain risk exposure.
+- Trump: Focus on whether this is a good deal after tariffs, tax, and US/China regulatory tape. Use only supplied headlines.
+- Musk: Focus on first-principles cost, manufacturing / AI scalability, and execution speed versus corporate bloat.`;
 }
 
 export function icUserPrompt(bundle: EngineBundle): string {

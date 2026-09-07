@@ -14,6 +14,8 @@ const ACCENT: Record<string, string> = {
   thiel: "border-l-tech",
   pe: "border-l-caution",
   dalio: "border-l-bear",
+  trump: "border-l-caution",
+  musk: "border-l-tech",
 };
 
 export function IcDebate({
@@ -30,7 +32,7 @@ export function IcDebate({
   const voteText = (vote: Vote) =>
     vote === "strong_invest" ? t("voteStrong") : vote === "conditional_invest" ? t("voteConditional") : t("votePass");
   const votes = analysis?.narratives.map((n) => n.vote) ?? [];
-  const verdict: Vote | null = votes.length >= 4 ? majorityVote(votes) : null;
+  const verdict: Vote | null = votes.length >= 2 ? majorityVote(votes) : null;
   const turns = analysis?.debate ?? [];
 
   return (

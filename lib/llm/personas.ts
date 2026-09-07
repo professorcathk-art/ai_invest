@@ -8,6 +8,8 @@ const NAMES = {
   thiel: "Peter Thiel",
   pe: "PE Partner",
   dalio: "Ray Dalio",
+  trump: "Donald Trump",
+  musk: "Elon Musk",
 } as const;
 
 export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
@@ -119,13 +121,14 @@ export function fallbackAnalysis(bundle: EngineBundle): IcAnalysis {
   };
 }
 
-export function majorityVote(votes: Vote[]): Vote {
+export function majorityVote(votes: Vote[]): Vote | null {
+  if (votes.length < 2) return null;
   const score = { strong_invest: 0, conditional_invest: 0, pass: 0 };
   for (const v of votes) score[v] += 1;
-  if (score.strong_invest >= 2) return "strong_invest";
-  if (score.pass >= 3) return "pass";
-  if (score.strong_invest + score.conditional_invest >= 2) return "conditional_invest";
-  return score.pass > score.strong_invest ? "pass" : "conditional_invest";
+  const invest = score.strong_invest + score.conditional_invest;
+  if (score.pass > invest) return "pass";
+  if (score.strong_invest >= score.conditional_invest && score.strong_invest > 0) return "strong_invest";
+  return "conditional_invest";
 }
 
 export { NAMES };

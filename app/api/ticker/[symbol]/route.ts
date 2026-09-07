@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadCompany } from "@/lib/data/load";
 import { fetchCompanyContext } from "@/lib/data/context";
+import { buildBusinessBreakdown } from "@/lib/data/segments";
 import { isUsableFinancials, isUsableValuation } from "@/lib/data/normalize";
 import { defaultSliders, runEngines } from "@/lib/engines";
 
@@ -22,6 +23,7 @@ export async function GET(
       highlights: [],
       references: [],
     }));
+    const business = await buildBusinessBreakdown(financials.quote.ticker, context).catch(() => null);
     return NextResponse.json({
       financials,
       sliders,
@@ -32,6 +34,7 @@ export async function GET(
       booksReady,
       valuationReady,
       context,
+      business,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown ticker error";

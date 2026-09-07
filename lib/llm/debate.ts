@@ -1,12 +1,17 @@
 import type { Locale } from "@/lib/i18n/messages";
+import { PERSONA_IDS, type PersonaId } from "./persona-ids";
 import type { IcAnalysis } from "./schemas";
 
-export type PersonaId = IcAnalysis["narratives"][number]["id"];
+export type { PersonaId };
 export type DebateVerdict = "PASS" | "INVEST" | "CONDITIONAL";
 export type VoteFamily = "pass" | "invest";
 export type DebateMode = "unanimous_pass" | "unanimous_invest" | "split";
 
-const PERSONA_IDS: PersonaId[] = ["buffett", "thiel", "pe", "dalio"];
+function committeeIds(narratives: IcAnalysis["narratives"]): PersonaId[] {
+  const present = new Set(narratives.map((n) => n.id));
+  const ids = PERSONA_IDS.filter((id) => present.has(id));
+  return ids.length ? ids : [...PERSONA_IDS.slice(0, 4)];
+}
 
 export function debateVerdict(
   vote: IcAnalysis["narratives"][number]["vote"],
@@ -22,17 +27,21 @@ export function voteFamily(verdict: DebateVerdict): VoteFamily {
 
 export function votingResults(
   narratives: IcAnalysis["narratives"],
-): Record<PersonaId, DebateVerdict> {
-  return {
-    buffett: debateVerdict(narratives.find((n) => n.id === "buffett")?.vote ?? "pass"),
-    thiel: debateVerdict(narratives.find((n) => n.id === "thiel")?.vote ?? "pass"),
-    pe: debateVerdict(narratives.find((n) => n.id === "pe")?.vote ?? "pass"),
-    dalio: debateVerdict(narratives.find((n) => n.id === "dalio")?.vote ?? "pass"),
-  };
+): Partial<Record<PersonaId, DebateVerdict>> {
+  const votes: Partial<Record<PersonaId, DebateVerdict>> = {};
+  for (const id of committeeIds(narratives)) {
+    votes[id] = debateVerdict(narratives.find((n) => n.id === id)?.vote ?? "pass");
+  }
+  return votes;
+}
+
+function voteIds(votes: ReturnType<typeof votingResults>): PersonaId[] {
+  return PERSONA_IDS.filter((id) => votes[id] != null);
 }
 
 export function debateMode(votes: ReturnType<typeof votingResults>): DebateMode {
-  const families = PERSONA_IDS.map((id) => voteFamily(votes[id]));
+  const families = voteIds(votes).map((id) => voteFamily(votes[id]!));
+  if (!families.length) return "split";
   if (families.every((f) => f === "pass")) return "unanimous_pass";
   if (families.every((f) => f === "invest")) return "unanimous_invest";
   return "split";
@@ -84,39 +93,41 @@ export function speakerSequence(
   target = debateTurnBounds(debateMode(votes)).target,
 ): PersonaId[] {
   const mode = debateMode(votes);
+  const ids = voteIds(votes);
   const bulls = sortByConviction(
-    PERSONA_IDS.filter((id) => voteFamily(votes[id]) === "invest"),
+    ids.filter((id) => voteFamily(votes[id]!) === "invest"),
     narratives,
   );
   const bears = sortByConviction(
-    PERSONA_IDS.filter((id) => voteFamily(votes[id]) === "pass"),
+    ids.filter((id) => voteFamily(votes[id]!) === "pass"),
     narratives,
   );
 
   if (mode !== "split") {
-    const ranked = sortByConviction(PERSONA_IDS, narratives);
-    const lead = ranked[0] ?? "buffett";
+    const ranked = sortByConviction(ids, narratives);
+    const lead = ranked[0] ?? ids[0] ?? "buffett";
     const devil = ranked[ranked.length - 1] && ranked[ranked.length - 1] !== lead
       ? ranked[ranked.length - 1]!
-      : (ranked.find((id) => id !== lead) ?? "thiel");
-    const closer = ranked.find((id) => id !== lead && id !== devil) ?? "pe";
+      : (ranked.find((id) => id !== lead) ?? ids[1] ?? "thiel");
+    const closer = ranked.find((id) => id !== lead && id !== devil) ?? ids.find((id) => id !== lead) ?? lead;
     return [lead, devil, closer].slice(0, target);
   }
 
   const sequence: PersonaId[] = [];
   for (let i = 0; i < Math.max(0, target - 1); i += 1) {
     const camp = i % 2 === 0 ? bulls : bears;
-    sequence.push(camp[Math.floor(i / 2) % camp.length] ?? PERSONA_IDS[i % PERSONA_IDS.length]!);
+    sequence.push(camp[Math.floor(i / 2) % camp.length] ?? ids[i % ids.length]!);
   }
-  const conditional = PERSONA_IDS.filter((id) => votes[id] === "CONDITIONAL");
+  const conditional = ids.filter((id) => votes[id] === "CONDITIONAL");
   let last: PersonaId =
     conditional.find((id) => id !== sequence[sequence.length - 1]) ??
     conditional[0] ??
     bears[bears.length - 1] ??
     bulls[bulls.length - 1] ??
+    ids[ids.length - 1] ??
     "dalio";
   if (last === sequence[sequence.length - 1]) {
-    last = (sequence[sequence.length - 1] === bulls[0] ? bears[0] : bulls[0]) ?? "dalio";
+    last = (sequence[sequence.length - 1] === bulls[0] ? bears[0] : bulls[0]) ?? last;
   }
   sequence.push(last);
   return sequence.slice(0, target);
@@ -143,7 +154,8 @@ export function normalizeDebateOutput(
           const item = row as Record<string, unknown>;
           const speaker = String(item.speaker ?? "");
           const text = String(item.text ?? "").replace(/\s+/g, " ").trim();
-          if (!SPEAKERS.has(speaker) || !text) return null;
+          const allowed = voteIds(votes);
+          if (!allowed.includes(speaker as PersonaId) || !SPEAKERS.has(speaker) || !text) return null;
           return { speaker: speaker as PersonaId, text };
         })
         .filter((row): row is IcAnalysis["debate"][number] => row != null)
@@ -160,43 +172,67 @@ function clip(text: string): string {
   return clean.length > 220 ? `${clean.slice(0, 217)}…` : clean;
 }
 
-const NAMES_EN = { buffett: "Buffett", thiel: "Thiel", pe: "the PE partner", dalio: "Dalio" } as const;
-const NAMES_ZH = { buffett: "巴菲特", thiel: "Thiel", pe: "PE Partner", dalio: "達利歐" } as const;
-const ANGLES_EN = {
+const NAMES_EN: Record<PersonaId, string> = {
+  buffett: "Buffett",
+  thiel: "Thiel",
+  pe: "the PE partner",
+  dalio: "Dalio",
+  trump: "Trump",
+  musk: "Musk",
+};
+const NAMES_ZH: Record<PersonaId, string> = {
+  buffett: "巴菲特",
+  thiel: "Thiel",
+  pe: "PE Partner",
+  dalio: "達利歐",
+  trump: "特朗普",
+  musk: "馬斯克",
+};
+const ANGLES_EN: Record<PersonaId, string> = {
   buffett: "moat and capital allocation",
   thiel: "monopoly vs commodity tech",
   pe: "supply chain and debt coverage",
   dalio: "cycle and refinancing risk",
-} as const;
-const ANGLES_ZH = {
+  trump: "deal terms versus tariff and US/China tape",
+  musk: "first-principles cost and factory speed",
+};
+const ANGLES_ZH: Record<PersonaId, string> = {
   buffett: "護城河與資本配置",
   thiel: "壟斷對商品化科技",
   pe: "供應鏈與債務覆蓋",
   dalio: "周期與再融資風險",
-} as const;
-const CONDITIONS_EN = {
+  trump: "交易條款對關稅與中美政策",
+  musk: "第一性原理成本與產能速度",
+};
+const CONDITIONS_EN: Record<PersonaId, string> = {
   buffett: "If the DCF upside clears 25% with intact owner earnings",
   thiel: "If a true 10x wedge appears versus substitutes",
   pe: "If FCF still covers 6.5% interest after a 20% EBITDA miss",
   dalio: "If net leverage stays refinanceable through a rates shock",
-} as const;
-const CONDITIONS_ZH = {
+  trump: "If the sourced DCF discount stays above 15% after the tariff tape",
+  musk: "If CapEx intensity falls while volume still scales",
+};
+const CONDITIONS_ZH: Record<PersonaId, string> = {
   buffett: "若 DCF 上行空間達到 25% 且業主盈餘仍可預測",
   thiel: "若相對替代品出現真正的 10 倍優勢",
   pe: "若 EBITDA 下跌 20% 後自由現金流仍能覆蓋 6.5% 利息",
   dalio: "若淨槓桿在利率衝擊下仍可再融資",
-} as const;
+  trump: "若計及關稅消息後，來源 DCF 折讓仍高於 15%",
+  musk: "若資本開支強度下降而產量仍能擴張",
+};
 
 function majorityLabel(votes: ReturnType<typeof votingResults>, locale: Locale): string {
-  const invest = PERSONA_IDS.filter((id) => voteFamily(votes[id]) === "invest").length;
-  const pass = 4 - invest;
+  const ids = voteIds(votes);
+  const invest = ids.filter((id) => voteFamily(votes[id]!) === "invest").length;
+  const pass = ids.length - invest;
+  const allStrong = ids.length > 0 && ids.every((id) => votes[id] === "INVEST");
   if (locale === "zh") {
-    if (pass === 4) return "不通過";
-    if (invest === 4) return votes.buffett === "INVEST" && votes.thiel === "INVEST" && votes.pe === "INVEST" && votes.dalio === "INVEST" ? "建議投資" : "有條件投資";
+    if (pass === ids.length) return "不通過";
+    if (invest === ids.length) return allStrong ? "建議投資" : "有條件投資";
     return invest >= pass ? "有條件投資（存在異議）" : "不通過（存在異議）";
   }
-  if (pass === 4) return "pass";
-  if (invest === 4) return "invest / conditional";
+  if (pass === ids.length) return "pass";
+  if (invest === ids.length) return "invest / conditional";
   return invest >= pass ? "conditional with dissent" : "pass with dissent";
 }
 
@@ -327,7 +363,7 @@ OUTPUT FORMAT (JSON only):
 Return JSON with "debate" array and "chairSummary":
 {
   "debate": [
-    { "speaker": "buffett"|"thiel"|"pe"|"dalio", "text": "..." }
+    { "speaker": "buffett"|"thiel"|"pe"|"dalio"|"trump"|"musk", "text": "..." }
   ],
   "chairSummary": "Dense 2-sentence summary of consensus, primary dissent, and key catalyst that would flip the vote."
 }`;

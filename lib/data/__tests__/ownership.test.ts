@@ -3,6 +3,7 @@ import {
   latestNamedFlow,
   marketFromTicker,
   namedParties,
+  ownershipIngestStandard,
   parseIngestBody,
   parseOwnershipRecord,
   pctDelta,
@@ -91,6 +92,13 @@ describe("ownership ingest", () => {
       },
     ]);
     expect(flow.buyers[0]?.name).toBe("CITIBANK N.A.");
+  });
+
+  it("publishes a write contract agents can copy", () => {
+    const standard = ownershipIngestStandard();
+    expect(standard.example_ok_hk.top_buyers[0]?.name).toMatch(/CITIBANK/);
+    expect(standard.hk.source).toContain("hkexnews");
+    expect(standard.us.fields.inst_holding_pct).toBeGreaterThan(0);
   });
 
   it("rejects estimated percentages with a reason agents can read", () => {

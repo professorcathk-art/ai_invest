@@ -2,8 +2,10 @@ import { z } from "zod";
 
 export const voteSchema = z.enum(["strong_invest", "conditional_invest", "pass"]);
 
+export const personaIdSchema = z.enum(["buffett", "thiel", "pe", "dalio", "trump", "musk"]);
+
 export const personaNarrativeSchema = z.object({
-  id: z.enum(["buffett", "thiel", "pe", "dalio"]),
+  id: personaIdSchema,
   vote: voteSchema,
   conviction: z.number().min(0).max(100),
   thesis: z.array(z.string()).min(3).max(5),
@@ -14,7 +16,7 @@ export const personaNarrativeSchema = z.object({
 });
 
 export const debateTurnSchema = z.object({
-  speaker: z.enum(["buffett", "thiel", "pe", "dalio"]),
+  speaker: personaIdSchema,
   text: z.string(),
 });
 
@@ -23,7 +25,7 @@ export const smartMoneyInsightSchema = z.object({
 });
 
 export const icAnalysisSchema = z.object({
-  narratives: z.array(personaNarrativeSchema).length(4),
+  narratives: z.array(personaNarrativeSchema).min(2).max(6),
   debate: z.array(debateTurnSchema).min(3).max(8),
   chairSummary: z.string(),
   smartMoneyInsight: smartMoneyInsightSchema.optional(),

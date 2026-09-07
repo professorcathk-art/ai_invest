@@ -23,9 +23,9 @@ import { DividendsCatalystsDashboard } from "@/components/dividends/dividends-ca
 import { IcDebate } from "@/components/debate/ic-debate";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { CompanyContextPanel, ReferencesPanel } from "@/components/news/company-context";
-import { LanguageToggle } from "@/components/i18n/language-toggle";
 import { LandingHero } from "@/components/home/landing-hero";
 import { ComplianceModal, DisclaimerFooter } from "@/components/compliance-modal";
+import { BusinessBreakdownDashboard } from "@/components/business/business-breakdown-dashboard";
 import { useI18n } from "@/components/i18n/provider";
 import { runEngines } from "@/lib/engines";
 import { isUsableValuation } from "@/lib/data/normalize";
@@ -33,6 +33,14 @@ import type { CompanyFinancials, PersonaScorecard, SliderAssumptions } from "@/l
 import type { IcAnalysis } from "@/lib/llm/schemas";
 import type { CompanyContext } from "@/lib/data/context";
 import type { AnalysisDepth } from "@/lib/i18n/messages";
+import type { BusinessBreakdown } from "@/lib/data/segments";
+import {
+  DEFAULT_PERSONA_IDS,
+  MIN_SELECTED_PERSONAS,
+  PERSONA_IDS,
+  type PersonaId,
+} from "@/lib/llm/persona-ids";
+import { pushRecentTicker } from "@/lib/recent-tickers";
 
 interface Payload {
   financials: CompanyFinancials;
@@ -42,7 +50,16 @@ interface Payload {
   context: CompanyContext;
 }
 
-export function Dashboard() {
+const PERSONA_LABEL: Record<PersonaId, "personaBuffett" | "personaThiel" | "personaPe" | "personaDalio" | "personaTrump" | "personaMusk"> = {
+  buffett: "personaBuffett",
+  thiel: "personaThiel",
+  pe: "personaPe",
+  dalio: "personaDalio",
+  trump: "personaTrump",
+  musk: "personaMusk",
+};
+
+export function Dashboard({ initialTicker }: { initialTicker?: string }) {
   const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
   const [sliders, setSliders] = useState<SliderAssumptions | null>(null);
@@ -51,7 +68,11 @@ export function Dashboard() {
   const [analysis, setAnalysis] = useState<IcAnalysis | null>(null);
   const [modeOpen, setModeOpen] = useState(false);
   const [depthChoice, setDepthChoice] = useState<AnalysisDepth>("concise");
+  const [selectedPersonas, setSelectedPersonas] = useState<PersonaId[]>([...DEFAULT_PERSONA_IDS]);
   const [synthesizeCatalysts, setSynthesizeCatalysts] = useState(false);
+  const [business, setBusiness] = useState<BusinessBreakdown | null>(null);
+  const [fromCache, setFromCache] = useState<string | null>(null);
+  const [recent, setRecent] = useState<string[]>([]);
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -79,6 +100,9 @@ export function Dashboard() {
       };
       setPayload(next);
       setSliders(json.sliders);
+      setBusiness(json.business ?? null);
+      setFromCache(null);
+      setRecent(pushRecentTicker(next.financials.quote.ticker));
       for (const warning of (json.financials.warnings as string[]) ?? []) {
         toast.warning(warning);
       }
@@ -104,10 +128,21 @@ export function Dashboard() {
       });
   }, [locale, ticker]);
 
+  useEffect(() => {
+    if (!initialTicker) return;
+    const timer = window.setTimeout(() => {
+      void loadTicker(initialTicker);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // Deep-link from top-nav recent badges.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTicker]);
+
   async function runIc(depth: AnalysisDepth) {
     if (!payload || !sliders || !bundle) return;
     setModeOpen(false);
     setAnalysis(null);
+    setFromCache(null);
     setAnalyzing(true);
     setSynthesizeCatalysts(true);
     const controller = new AbortController();
@@ -116,7 +151,13 @@ export function Dashboard() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ financials: payload.financials, sliders, locale, depth }),
+        body: JSON.stringify({
+          financials: payload.financials,
+          sliders,
+          locale,
+          depth,
+          selected_personas: selectedPersonas,
+        }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -144,10 +185,18 @@ export function Dashboard() {
             narrative?: IcAnalysis["narratives"][number];
             analysis?: IcAnalysis;
             smartMoneyInsight?: IcAnalysis["smartMoneyInsight"];
+            cachedAt?: string;
+            fromCache?: boolean;
+            business?: BusinessBreakdown;
             error?: string;
           };
           if (event.type === "context" && event.context) {
             setPayload((prev) => (prev ? { ...prev, context: event.context! } : prev));
+            if (event.business) setBusiness(event.business);
+          }
+          if (event.type === "cached" && event.analysis) {
+            setAnalysis(event.analysis);
+            setFromCache(event.cachedAt ?? new Date().toISOString());
           }
           if (event.type === "smartMoney" && event.smartMoneyInsight) {
             const insight = event.smartMoneyInsight;
@@ -172,6 +221,7 @@ export function Dashboard() {
           }
           if (event.type === "complete" && event.analysis) {
             setAnalysis(event.analysis);
+            if (event.fromCache) setFromCache(event.cachedAt ?? new Date().toISOString());
             completed = true;
           }
           if (event.type === "error") {
@@ -201,7 +251,6 @@ export function Dashboard() {
       <ComplianceModal />
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-bull text-[11px] tracking-[0.22em] uppercase">{t("brand")}</p>
           {payload ? (
             <>
               <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("titleShort")}</h1>
@@ -210,7 +259,6 @@ export function Dashboard() {
           ) : null}
         </div>
         <div className="flex flex-col items-stretch gap-3 sm:items-end">
-          <LanguageToggle />
           {payload ? (
             <TickerSearch
               onSelect={loadTicker}
@@ -228,7 +276,7 @@ export function Dashboard() {
       ) : null}
 
       {!bundle || !payload ? (
-        <LandingHero onSelect={loadTicker} disabled={loading} />
+        <LandingHero onSelect={loadTicker} disabled={loading} recent={recent.length ? recent : undefined} />
       ) : (
         <>
           <QuoteBar quote={bundle.financials.quote} />
@@ -238,6 +286,11 @@ export function Dashboard() {
               {analyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {analyzing ? t("generating") : t("runIc")}
             </Button>
+            {fromCache ? (
+              <span className="text-bull rounded-full border border-bull/30 bg-bull/10 px-2.5 py-1 text-xs">
+                ⚡ {t("cacheLoaded")}
+              </span>
+            ) : null}
           </div>
           <Dialog
             open={modeOpen}
@@ -246,7 +299,7 @@ export function Dashboard() {
               if (open) setDepthChoice("concise");
             }}
           >
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{t("modeTitle")}</DialogTitle>
                 <DialogDescription className="text-pretty">{t("pressRunHint")}</DialogDescription>
@@ -276,11 +329,47 @@ export function Dashboard() {
                   );
                 })}
               </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium">{t("personaSelectTitle")}</div>
+                <p className="text-muted-foreground text-xs leading-relaxed">{t("personaSelectHint")}</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {PERSONA_IDS.map((id) => {
+                    const checked = selectedPersonas.includes(id);
+                    return (
+                      <label
+                        key={id}
+                        className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                          checked ? "border-bull bg-bull/10" : "border-border"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedPersonas((prev) =>
+                              prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+                            );
+                          }}
+                        />
+                        {t(PERSONA_LABEL[id])}
+                      </label>
+                    );
+                  })}
+                </div>
+                {selectedPersonas.length < MIN_SELECTED_PERSONAS ? (
+                  <p className="text-caution text-xs">{t("personaMinError")}</p>
+                ) : null}
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setModeOpen(false)}>
                   {t("modeCancel")}
                 </Button>
-                <Button onClick={() => runIc(depthChoice)}>{t("modeConfirm")}</Button>
+                <Button
+                  onClick={() => runIc(depthChoice)}
+                  disabled={selectedPersonas.length < MIN_SELECTED_PERSONAS}
+                >
+                  {t("modeConfirm")}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -317,11 +406,17 @@ export function Dashboard() {
                 >
                   {t("tabCatalysts")}
                 </TabsTrigger>
+                <TabsTrigger
+                  value="business"
+                  className="h-9 flex-none items-center px-3 text-xs leading-none whitespace-nowrap after:hidden sm:text-sm"
+                >
+                  {t("tabBusiness")}
+                </TabsTrigger>
               </TabsList>
             </div>
             <TabsContent value="personas">
               <PersonaMatrix
-                scorecards={bundle.personas}
+                scorecards={bundle.personas.filter((p) => selectedPersonas.includes(p.id))}
                 analysis={analysis}
                 booksReady={valuationReady}
                 analyzing={analyzing}
@@ -348,7 +443,7 @@ export function Dashboard() {
             </TabsContent>
             <TabsContent value="debate">
               <IcDebate
-                scorecards={bundle.personas}
+                scorecards={bundle.personas.filter((p) => selectedPersonas.includes(p.id))}
                 analysis={analysis}
                 streaming={analyzing}
                 booksReady={valuationReady}
@@ -366,6 +461,9 @@ export function Dashboard() {
                 ticker={bundle.financials.quote.ticker}
                 synthesize={synthesizeCatalysts}
               />
+            </TabsContent>
+            <TabsContent value="business">
+              <BusinessBreakdownDashboard breakdown={business} />
             </TabsContent>
           </Tabs>
           {analysis ? <ReferencesPanel context={payload.context} /> : null}

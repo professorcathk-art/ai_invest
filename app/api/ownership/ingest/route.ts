@@ -1,8 +1,26 @@
 import { ingestAuthorized } from "@/lib/api/ingest-auth";
-import { parseIngestBody } from "@/lib/data/ownership";
+import { ownershipIngestStandard, parseIngestBody } from "@/lib/data/ownership";
 import { upsertOwnership } from "@/lib/data/ownership-store";
 
 export const runtime = "nodejs";
+
+function rejectPayload(error: string) {
+  return {
+    ok: false,
+    error,
+    how_to_fix: "Compare your JSON to standard.example_ok_hk or standard.example_ok_us, then POST again. Do not invent names or percentages.",
+    standard: ownershipIngestStandard(),
+  };
+}
+
+/** Workbuddy can GET this route to learn the write contract before posting. */
+export async function GET() {
+  return Response.json({
+    ok: true,
+    message: "Ownership ingest accepts sourced CCASS / 13F rows only. POST with Bearer RESEARCH_INGEST_TOKEN.",
+    standard: ownershipIngestStandard(),
+  });
+}
 
 export async function POST(request: Request) {
   if (!process.env.RESEARCH_INGEST_TOKEN?.trim()) {
@@ -21,30 +39,23 @@ export async function POST(request: Request) {
 
   const parsed = parseIngestBody(body);
   if ("error" in parsed) {
-    const rejected = /rejected:/i.test(parsed.error);
-    return Response.json(
-      {
-        error: parsed.error,
-        hint: rejected
-          ? "Do not invent holdings. HK rows need named CCASS participants from HKEX; US rows need Yahoo 13F/Form 4 fields. POST /api/ownership/ingest with Bearer RESEARCH_INGEST_TOKEN."
-          : undefined,
-      },
-      { status: 400 },
-    );
+    return Response.json(rejectPayload(parsed.error), { status: 400 });
   }
 
   const result = await upsertOwnership(parsed);
   if ("error" in result) {
     const rejected = /rejected:/i.test(result.error);
-    return Response.json(
-      {
-        error: result.error,
-        hint: rejected
-          ? "Do not invent holdings. HK rows need named CCASS participants; US rows need Yahoo 13F/Form 4 fields. Use RESEARCH_INGEST_TOKEN against /api/ownership/ingest — never write estimated percentages with the service role."
-          : undefined,
-      },
-      { status: rejected ? 400 : 503 },
-    );
+    return Response.json(rejectPayload(result.error), { status: rejected ? 400 : 503 });
   }
-  return Response.json({ ok: true, written: result.written });
+  return Response.json({
+    ok: true,
+    written: result.written,
+    accepted: parsed.map((row) => ({
+      ticker: row.ticker,
+      as_of_date: row.as_of_date,
+      market_type: row.market_type,
+      signal_type: row.signal_type,
+      named_parties: row.top_buyers.length + row.top_sellers.length,
+    })),
+  });
 }

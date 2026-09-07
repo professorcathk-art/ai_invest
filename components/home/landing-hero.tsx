@@ -4,6 +4,7 @@ import { Calculator, FileSpreadsheet, Search, Sparkles, Users } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TickerSearch } from "@/components/header/ticker-search";
+import { RecentTickers } from "@/components/header/recent-tickers";
 import { useI18n } from "@/components/i18n/provider";
 
 const QUICK_TICKERS = ["NVDA", "0700.HK", "9988.HK", "AAPL", "TSLA"] as const;
@@ -23,9 +24,11 @@ const FEATURES = [
 export function LandingHero({
   onSelect,
   disabled,
+  recent,
 }: {
   onSelect: (symbol: string) => void;
   disabled?: boolean;
+  recent?: string[];
 }) {
   const { t } = useI18n();
 
@@ -57,6 +60,10 @@ export function LandingHero({
             disabled={disabled}
             placeholder={t("searchPlaceholder")}
           />
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          <RecentTickers onSelect={onSelect} tickers={recent} />
         </div>
 
         <div className="mt-5 flex flex-wrap justify-center gap-2">

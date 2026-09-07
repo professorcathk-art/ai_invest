@@ -123,6 +123,77 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
     },
   ];
 
+  const trumpChecks: ThresholdCheck[] = [
+    {
+      id: "deal",
+      label: "Deal vs DCF",
+      actual: dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 ? num(dcf.upsideGordon) : null,
+      target: "> 15% upside",
+      passed:
+        dcf.impliedPriceGordon > 0 && dcf.marketPrice > 0 ? dcf.upsideGordon > 0.15 : null,
+      format: "pct",
+    },
+    {
+      id: "nd",
+      label: "Leverage on the deal",
+      actual: num(vc.netDebtToEbitda),
+      target: "< 3.0x",
+      passed: vc.netDebtToEbitda == null ? null : vc.netDebtToEbitda < 3,
+      format: "multiple",
+    },
+    {
+      id: "yoy2",
+      label: "Still winning share",
+      actual: num(vc.yoyGrowth),
+      target: "> 0%",
+      passed: vc.yoyGrowth == null ? null : vc.yoyGrowth > 0,
+      format: "pct",
+    },
+    {
+      id: "cash2",
+      label: "Cash to fund the deal",
+      actual: num(vc.fcfMargin),
+      target: "> 3%",
+      passed: vc.fcfMargin == null ? null : vc.fcfMargin > 0.03,
+      format: "pct",
+    },
+  ];
+
+  const muskChecks: ThresholdCheck[] = [
+    {
+      id: "scale",
+      label: "Scaling speed",
+      actual: num(vc.yoyGrowth),
+      target: "> 20%",
+      passed: vc.yoyGrowth == null ? null : vc.yoyGrowth > 0.2,
+      format: "pct",
+    },
+    {
+      id: "gm2",
+      label: "First-principles margin",
+      actual: num(vc.grossMargin),
+      target: "> 40%",
+      passed: vc.grossMargin == null ? null : vc.grossMargin > 0.4,
+      format: "pct",
+    },
+    {
+      id: "capex",
+      label: "CapEx intensity",
+      actual: Number.isFinite(dcf.capexPct) ? num(dcf.capexPct) : null,
+      target: "< 15% sales",
+      passed: Number.isFinite(dcf.capexPct) ? dcf.capexPct < 0.15 : null,
+      format: "pct",
+    },
+    {
+      id: "conv2",
+      label: "Factory cash conversion",
+      actual: num(vc.fcfConversion),
+      target: "> 40%",
+      passed: vc.fcfConversion == null ? null : vc.fcfConversion > 0.4,
+      format: "pct",
+    },
+  ];
+
   const dalioChecks: ThresholdCheck[] = [
     {
       id: "nd",
@@ -165,5 +236,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
     make("thiel", "Peter Thiel", "Deep Tech / Early VC", thielChecks),
     make("pe", "PE Partner (KKR / BX)", "LBO / Buyout", peChecks),
     make("dalio", "Ray Dalio", "Macro / Risk Parity", dalioChecks),
+    make("trump", "Donald Trump", "Macro / Dealmaker", trumpChecks),
+    make("musk", "Elon Musk", "First Principles / Hard Tech", muskChecks),
   ];
 }

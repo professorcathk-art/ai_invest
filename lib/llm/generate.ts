@@ -19,6 +19,7 @@ import {
 import type { EngineBundle } from "@/lib/engines/types";
 import { contextBrief, type CompanyContext } from "@/lib/data/context";
 import type { AnalysisDepth, Locale } from "@/lib/i18n/messages";
+import { DEFAULT_PERSONA_IDS, type PersonaId } from "./persona-ids";
 import type { z } from "zod";
 
 Object.defineProperty(globalThis, "AI_SDK_LOG_WARNINGS", {
@@ -31,7 +32,14 @@ export const PERSONAS = [
   { id: "thiel" as const, name: "Peter Thiel", lens: PERSONA_LENSES.thiel },
   { id: "pe" as const, name: "PE Partner (KKR / Blackstone)", lens: PERSONA_LENSES.pe },
   { id: "dalio" as const, name: "Ray Dalio", lens: PERSONA_LENSES.dalio },
+  { id: "trump" as const, name: "Donald Trump", lens: PERSONA_LENSES.trump },
+  { id: "musk" as const, name: "Elon Musk", lens: PERSONA_LENSES.musk },
 ];
+
+export function personasFor(ids: readonly PersonaId[]) {
+  const wanted = new Set(ids);
+  return PERSONAS.filter((p) => wanted.has(p.id));
+}
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -162,11 +170,11 @@ export async function generateDebate(
     `${debateSystemPrompt(votes, sequence)}
 CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD. Never paste raw headline titles.
 ${languageRule(locale)}
-Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio","text":"..."}], "chairSummary":"..." }`,
+Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio"|"trump"|"musk","text":"..."}], "chairSummary":"..." }`,
     `SPEAKER_SEQUENCE: ${sequence.join(" → ")}
 TURN_COUNT: exactly ${target} (allowed ${min}-${max}).
 
-FOUR_NARRATIVES:
+SELECTED_NARRATIVES:
 ${digest}
 
 FINANCIALS_AND_VALUATION_MODELS:
@@ -191,20 +199,22 @@ export async function generateIcAnalysis(
   ctx: CompanyContext,
   locale: Locale = "en",
   depth: AnalysisDepth = "concise",
+  selected: readonly PersonaId[] = DEFAULT_PERSONA_IDS,
 ): Promise<IcAnalysis> {
+  const roster = personasFor(selected);
   const results = await Promise.allSettled(
-    PERSONAS.map((p) => generatePersonaNarrative(p.id, bundle, ctx, locale, depth)),
+    roster.map((p) => generatePersonaNarrative(p.id, bundle, ctx, locale, depth)),
   );
   const narratives = results
     .filter((r): r is PromiseFulfilledResult<IcAnalysis["narratives"][number]> => r.status === "fulfilled")
     .map((r) => r.value);
-  if (narratives.length < 4) {
+  if (narratives.length < roster.length) {
     const reasons = results
       .filter((r): r is PromiseRejectedResult => r.status === "rejected")
       .map((r) => (r.reason instanceof Error ? r.reason.message : "failed"));
-    throw new Error(`DeepSeek persona generation failed (${narratives.length}/4). ${reasons[0] ?? ""}`);
+    throw new Error(`DeepSeek persona generation failed (${narratives.length}/${roster.length}). ${reasons[0] ?? ""}`);
   }
-  const ordered = PERSONAS.map((p) => narratives.find((n) => n.id === p.id)).filter(
+  const ordered = roster.map((p) => narratives.find((n) => n.id === p.id)).filter(
     (n): n is IcAnalysis["narratives"][number] => Boolean(n),
   );
   const { debate, chairSummary } = await generateDebate(ordered, bundle, ctx, locale, depth);

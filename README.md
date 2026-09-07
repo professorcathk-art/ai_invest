@@ -37,13 +37,15 @@ Investor writing style lives in `lib/llm/lenses.ts` — edit that file to change
 
 Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/...&s=TICKER`), not from Yahoo’s generic search feed (that feed is why older builds showed unrelated stories). Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
 
-Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
+Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, 72-hour IC memo cache (`cached_analyses`), analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
+
+Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Both pages stay blank when the public feed is empty — no invented sector commentary or fake Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present.
 
 HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Running a committee review also writes a 3-bullet `smartMoneyInsight` from those snapshots. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
 
-The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Default names are in `scripts/ownership_tickers.txt`. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
+The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HKEX pass needs the iMac awake for about 90 minutes. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
 
-**Agents (Workbuddy / Codex) must not invent holdings.** Write only through `POST /api/ownership/ingest` with `Authorization: Bearer $RESEARCH_INGEST_TOKEN`. Never use `SUPABASE_SERVICE_ROLE_KEY` to upsert estimates. HK rows need named CCASS participants on a trading day; US rows need Yahoo 13F / Form 4 fields. Unsourced writes are rejected by the API **and** a Postgres trigger, with the reject reason in the response body.
+**Agents (Workbuddy / Codex) may write sourced rows.** `GET /api/ownership/ingest` returns the JSON contract and valid examples. `POST` with `Authorization: Bearer $RESEARCH_INGEST_TOKEN`. A 400 includes `error`, `how_to_fix`, and the same `standard` so the agent can adjust. HK rows need named CCASS participants; US rows need Yahoo 13F / Form 4 fields. Unsourced writes are also blocked by a Postgres trigger.
 
 ## Scripts
 

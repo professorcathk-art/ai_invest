@@ -248,7 +248,7 @@ export function segmentBrief(breakdown: BusinessBreakdown, locale: Locale): stri
     breakdown.period ? `Latest segment period: ${breakdown.period}` : "",
     prod ? `Revenue by product / segment (sourced): ${prod}` : "Revenue by product: not disclosed in feed.",
     geo ? `Revenue by geography (sourced): ${geo}` : "Revenue by geography: not disclosed in feed.",
-    "You MUST cite these sourced segments when arguing valuation. Never invent a mix (e.g. fake Gaming/Cloud/Ads splits).",
+    "Background only. Use a line of business if it is material to YOUR mental model. Never invent a mix.",
   ]
     .filter(Boolean)
     .join("\n");

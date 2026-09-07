@@ -1,4 +1,6 @@
 import type { EngineBundle } from "@/lib/engines/types";
+import type { CompanyContext } from "@/lib/data/context";
+import { contextBrief } from "@/lib/data/context";
 import type { Locale } from "@/lib/i18n/messages";
 import { formatMoney, formatMoneyCompact, formatMultiple, formatPct } from "@/lib/format";
 
@@ -93,26 +95,31 @@ export function metricsBrief(bundle: EngineBundle): string {
   );
 }
 
+/** Layer 1: shared IC rules. Personas apply their own mental-model filter — not a segment checklist. */
 export function icSystemPrompt(): string {
-  return `You are the Investment Committee (IC) Secretariat for InvestMouse, producing institutional-grade investment research memos.
+  return `You are the Investment Committee (IC) Secretariat for InvestMouse.
 
-CRITICAL ANALYTICAL RULES
-1. NUMERICAL ACCURACY: Use ONLY the provided engine metrics (DCF prices, LBO IRR/MoIC, ROIC, Rule of 40, Leverage). Never invent numbers.
-2. MARKET CATALYST SYNTHESIS: Integrate recent news headlines logically as underlying BUSINESS EVENTS or MARKET CATALYSTS (e.g., earnings misses, macro headwinds, margin pressures). DO NOT copy-paste raw headline title strings verbatim into sentences.
-3. DENSE LOGIC OVER BLOAT: Focus on financial logic and strategic moats. Avoid generic fluff. Structure each persona's output into distinct analytical paragraphs rather than chasing arbitrary sentence counts.
+3-LAYER INTELLIGENCE
+1. RICH FACT PACKET: engine tape, business overview, sourced segments if any, macro/news, ownership. Neutral background only.
+2. INVESTOR WISDOM: each seat has their own principles and quotes.
+3. MENTAL MODEL FILTER: each seat reads the packet ONLY through their philosophy. They may ignore packet fields that do not matter to them.
 
-SEGMENT & UNIT-ECONOMICS MANDATE
-- If sourced segment / product / geographic mix is supplied, you MUST name the specific lines (e.g. Gaming vs Cloud vs Advertising) and say which line is driving or dragging the valuation.
-- Tie engine figures (gross margin, FCF conversion, YoY, DCF gap) to those sourced lines when possible.
-- If segment data is missing, say so. NEVER invent a mix, share, or unit-economic print.
+HARD RULES
+- Use ONLY figures and headlines that appear in the packet. Never invent numbers, holdings, or a segment mix.
+- Do not force every persona to quote the same segments, the same four metrics, or a generic financial summary.
+- Digest headlines as events when they matter to that seat. Never paste raw title strings.
+- Dense reasoning over padding. No arbitrary sentence-count or bullet-count theater.`;
+}
 
-INVESTOR PERSONA PERSPECTIVES
-- Buffett: Focus on durable business moats, predictability of cash flows, capital allocation discipline, ROIC vs WACC, and Margin of Safety.
-- Thiel: Focus on 10x technological advantage, monopoly potential, network effects, and "Zero to One" scalability vs linear commodity businesses.
-- PE Partner: Focus on debt serviceability (at 6.5% interest), free cash flow conversion, EBITDA margin defense, down-side protection, and 5-year Base/Bear IRR.
-- Dalio: Focus on macroeconomic cycle positioning, inflation/interest rate sensitivity, balance sheet leverage resilience, and sovereign/supply-chain risk exposure.
-- Trump: Focus on whether this is a good deal after tariffs, tax, and US/China regulatory tape. Use only supplied headlines.
-- Musk: Focus on first-principles cost, manufacturing / AI scalability, and execution speed versus corporate bloat.`;
+/** Layer 1 user payload: one packet, many filters. */
+export function factPacket(bundle: EngineBundle, ctx: CompanyContext): string {
+  return `RICH FACT PACKET (neutral background — apply your own mental-model filter; do not recap every row)
+
+ENGINE TAPE (deterministic; do not invent):
+${metricsBrief(bundle)}
+
+PUBLIC CONTEXT (overview, headlines, sourced segments if present, ownership):
+${contextBrief(ctx)}`;
 }
 
 export function icUserPrompt(bundle: EngineBundle): string {

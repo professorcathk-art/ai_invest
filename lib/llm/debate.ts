@@ -357,7 +357,7 @@ DYNAMIC TURN STRUCTURE RULES:
   - Let the most aggressive Bear attack the Bull's thesis directly.
   - The LAST turn must offer a compromise / vote-shift condition.
 
-FORBIDDEN: ritual "I agree with PASS/INVEST" as the substance of a turn; a fixed Buffett→Thiel→PE→Dalio parade; inventing figures, holdings, or headlines.
+FORBIDDEN: ritual "I agree with PASS/INVEST" as the substance of a turn; a fixed Buffett→Thiel→PE→Dalio parade; inventing figures, holdings, or headlines; forcing every speaker to recap the same segments or the same four metrics. Each seat argues from THEIR mental model.
 
 OUTPUT FORMAT (JSON only):
 Return JSON with "debate" array and "chairSummary":

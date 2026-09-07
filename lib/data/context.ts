@@ -390,8 +390,8 @@ export function contextBrief(ctx: CompanyContext): string {
       ? `Recent company headlines (digest into business events / market catalysts; do not paste titles verbatim):\n${headlines}`
       : "Recent headlines: none available.",
     ctx.segmentBrief
-      ? `Sourced business segments / geography (cite these; never invent a mix):\n${ctx.segmentBrief}`
-      : "Sourced business segments: none. Do not invent Gaming vs Cloud vs Ads (or any other) splits.",
+      ? `Sourced business segments / geography (background — not a citation mandate):\n${ctx.segmentBrief}`
+      : "Sourced business segments: none in this packet. Do not invent a mix.",
     ctx.ownershipBrief
       ? `Ownership / CCASS / 13F (use these figures only; do not invent holdings):\n${ctx.ownershipBrief}`
       : "",

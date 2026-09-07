@@ -1,6 +1,7 @@
 import { deepseek } from "@ai-sdk/deepseek";
 import { generateText } from "ai";
-import { icSystemPrompt, languageRule, metricsBrief } from "./prompts";
+import { factPacket, languageRule, metricsBrief } from "./prompts";
+import { personaSystemPrompt } from "@/lib/persona-prompts";
 import {
   icAnalysisSchema,
   personaNarrativeSchema,
@@ -76,24 +77,8 @@ async function complete(
   return text;
 }
 
-function depthRule(depth: AnalysisDepth): { rule: string; tokens: number } {
-  if (depth === "professional") {
-    return {
-      tokens: 1800,
-      rule: `PROFESSIONAL MODE:
-- Dense, high-conviction paragraphs. Open with the company, ticker, and spot price from the JSON.
-- Cite at least FOUR engine figures with the exact printed values (price, DCF, IRR, margins, FCF, leverage).
-- Synthesize at least one supplied headline as a BUSINESS EVENT or MARKET CATALYST. Never paste the raw title string.
-- No generic lines such as "the moat looks durable" unless a number supports or kills that claim.
-- If a metric is "—" or null, say the books are incomplete for that item.`,
-    };
-  }
-  return {
-    tokens: 1100,
-    rule: `CONCISE MODE:
-- Dense paragraphs, not sentence-count padding. Still cite at least three engine figures with exact values.
-- Digest headlines into catalysts. Never dump raw headline titles.`,
-  };
+function depthTokens(depth: AnalysisDepth): number {
+  return depth === "professional" ? 1800 : 1100;
 }
 
 export async function generatePersonaNarrative(
@@ -104,28 +89,10 @@ export async function generatePersonaNarrative(
   depth: AnalysisDepth = "concise",
 ): Promise<z.infer<typeof personaNarrativeSchema>> {
   const persona = PERSONAS.find((p) => p.id === personaId)!;
-  const { rule, tokens } = depthRule(depth);
   const text = await complete(
-    `You are ${persona.name} sitting in a live Investment Committee.
-${icSystemPrompt()}
-
-YOUR LENS
-${persona.lens}
-
-HARD RULES:
-- Use ONLY the supplied engine JSON and public context. Never invent financial figures, headlines, or filings.
-- QUALITATIVE FIRST: analyze business model, moat, supply chain or macro mechanics BEFORE quoting valuation figures.
-- SYNTHESIS: weave business model + market catalysts (digested from headlines) + engine figures. Never recap numbers without saying what they mean for the vote.
-- Follow your lens's 3-part structure inside argument (use \\n\\n between paragraphs).
-- Never copy-paste raw headline title strings into prose.
-- CURRENCY: company.reportingCurrency is the only money unit. Quote prices as "HKD 154.50", "-HKD 101.99", or "USD 190". Keep the minus on negative DCF / EV. Never convert, and never write USD / 美元 / $ unless reportingCurrency is USD. Hong Kong listings (.HK) are HKD.
-- ${rule}
-- ${languageRule(locale)}
-- Return ONLY a JSON object with keys: id, vote ("strong_invest"|"conditional_invest"|"pass"), conviction (0-100 integer), thesis (3-5 strings), valuationTake, argument, catalysts (2-4), risks (2-4).
-- vote is YOUR IC recommendation. conviction is how strongly you hold that vote.
-- id must be "${persona.id}".`,
-    `Company metrics (deterministic engines — quote these):\n${metricsBrief(bundle)}\n\nPublic context (digest headlines as events/catalysts; do not invent):\n${contextBrief(ctx)}`,
-    tokens,
+    personaSystemPrompt(persona.id, locale, depth),
+    factPacket(bundle, ctx),
+    depthTokens(depth),
   );
   const parsed = extractJson(text);
   if (!parsed || typeof parsed !== "object") throw new Error("Persona JSON was not an object");

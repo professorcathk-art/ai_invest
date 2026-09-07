@@ -19,18 +19,41 @@ API_URL = os.getenv("INVESTMOUSE_API_URL", "").strip()
 INGEST_TOKEN = os.getenv("RESEARCH_INGEST_TOKEN", "")
 
 
+GENERIC_PARTY = (
+    "insiders",
+    "retail brokers",
+    "index funds",
+    "institutions",
+    "smart money",
+    "custodians",
+    "corporate buyback",
+)
+
+
+def _named(rows: object) -> bool:
+    if not isinstance(rows, list):
+        return False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip().lower()
+        if name and name not in GENERIC_PARTY:
+            return True
+    return False
+
+
 def has_real_metrics(payload: dict) -> bool:
+    ticker = str(payload.get("ticker") or "")
+    named = _named(payload.get("top_buyers")) or _named(payload.get("top_sellers"))
+    if ticker.upper().endswith(".HK"):
+        return named
     numbers = [
-        payload.get("institutional_pct"),
-        payload.get("retail_pct"),
         payload.get("inst_holding_pct"),
         payload.get("insider_holding_pct"),
         payload.get("short_interest_pct"),
         payload.get("net_insider_usd"),
     ]
-    if any(value is not None for value in numbers):
-        return True
-    return bool(payload.get("top_buyers") or payload.get("top_sellers"))
+    return named or any(value is not None for value in numbers)
 
 
 def build_payload(ticker: str) -> dict:
@@ -55,7 +78,10 @@ def fetch_and_push(ticker: str = "9988.HK") -> int:
         return 1
 
     if not has_real_metrics(payload):
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Skip {ticker}: no figures returned.")
+        print(
+            f"[{datetime.now(timezone.utc).isoformat()}] Skip {ticker}: "
+            "no named CCASS participants or 13F/Form 4 fields (estimates are rejected)."
+        )
         return 0
 
     print(f"[{datetime.now(timezone.utc).isoformat()}] Pushing {ticker} {payload.get('signal_type')}")

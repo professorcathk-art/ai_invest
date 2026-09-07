@@ -21,7 +21,7 @@ describe("ownership ingest", () => {
     });
     const row = parseOwnershipRecord({
       ticker: "9988.hk",
-      as_of_date: "2026-09-06",
+      as_of_date: "2026-09-04",
       institutional_pct: 42.5,
       retail_pct: 14.2,
       top_buyers: [{ name: "J.P. Morgan Securities", change_30d: "+1.15%" }],
@@ -39,7 +39,7 @@ describe("ownership ingest", () => {
     const parsed = parseIngestBody({
       records: [
         { ticker: "AAPL", as_of_date: "2026-06-30", signal_type: "NEUTRAL", inst_holding_pct: 68.5 },
-        { ticker: "AAPL", as_of_date: "2026-03-31", signal_type: "INSIDER_BULLISH", inst_holding_pct: 67.1 },
+        { ticker: "AAPL", as_of_date: "2026-03-31", signal_type: "INSIDER_BULLISH", inst_holding_pct: 67.1, net_insider_usd: 12_000_000 },
       ],
     });
     expect("error" in parsed).toBe(false);
@@ -55,7 +55,7 @@ describe("ownership ingest", () => {
     expect(
       parseOwnershipRecord({
         ticker: "0700.HK",
-        as_of_date: "2026-09-06",
+        as_of_date: "2026-09-04",
         signal_type: "INSIDER_BULLISH",
         top_buyers: [{ name: "Insiders", change_30d: "+0.50%" }],
       }),
@@ -63,7 +63,7 @@ describe("ownership ingest", () => {
     const flow = latestNamedFlow([
       {
         ticker: "0700.HK",
-        as_of_date: "2026-09-06",
+        as_of_date: "2026-09-07",
         market_type: "HK",
         institutional_pct: 52,
         retail_pct: 9,
@@ -91,5 +91,26 @@ describe("ownership ingest", () => {
       },
     ]);
     expect(flow.buyers[0]?.name).toBe("CITIBANK N.A.");
+  });
+
+  it("rejects estimated percentages with a reason agents can read", () => {
+    expect(
+      parseOwnershipRecord({
+        ticker: "0700.HK",
+        as_of_date: "2026-09-07",
+        signal_type: "NEUTRAL",
+        institutional_pct: 52.74,
+        retail_pct: 9.12,
+      }),
+    ).toEqual({ error: expect.stringContaining("no real CCASS participant names") });
+    expect(
+      parseOwnershipRecord({
+        ticker: "AAPL",
+        as_of_date: "2026-09-07",
+        signal_type: "INSIDER_BULLISH",
+        institutional_pct: 50.64,
+        retail_pct: 10.27,
+      }),
+    ).toEqual({ error: expect.stringContaining("13F/Form 4") });
   });
 });

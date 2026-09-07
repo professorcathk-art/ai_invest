@@ -46,7 +46,7 @@ function numOrNull(value: unknown): number | null {
 }
 
 const GENERIC_PARTY =
-  /^(insiders|retail brokers|index funds|institutions|smart money|custodians)$/i;
+  /^(insiders|retail brokers|index funds|institutions|smart money|custodians|corporate buyback)$/i;
 
 export function isGenericParty(name: string): boolean {
   return GENERIC_PARTY.test(name.trim());
@@ -93,9 +93,12 @@ export function parseOwnershipRecord(input: unknown): OwnershipSnapshot | { erro
   const marketRaw = String(rec.market_type ?? marketFromTicker(ticker)).toUpperCase();
   const market_type: OwnershipMarket = marketRaw === "US" ? "US" : "HK";
   if (market_type === "HK" && (signal === "INSIDER_BULLISH" || signal === "INSIDER_SELLING")) {
-    return { error: "HK CCASS snapshots cannot use insider signals." };
+    return {
+      error:
+        "Rejected: HK CCASS snapshots cannot use insider signals. Use INSTITUTIONAL_ACCUMULATION, RETAIL_TRAP, or NEUTRAL from real participant flow.",
+    };
   }
-  return {
+  const snapshot: OwnershipSnapshot = {
     ticker,
     as_of_date: asOf,
     market_type,
@@ -109,6 +112,36 @@ export function parseOwnershipRecord(input: unknown): OwnershipSnapshot | { erro
     top_sellers: parties(rec.top_sellers),
     signal_type: signal,
   };
+  const quality = ownershipQualityError(snapshot);
+  if (quality) return { error: quality };
+  return snapshot;
+}
+
+/** Agents writing estimates get a concrete reject reason — same rules as the Postgres trigger. */
+export function ownershipQualityError(row: OwnershipSnapshot): string | null {
+  const named = [...namedParties(row.top_buyers), ...namedParties(row.top_sellers)];
+  if (row.market_type === "HK") {
+    if (named.length === 0) {
+      return "Rejected: HK snapshot has no real CCASS participant names. Estimated institutional/retail percentages without brokers (Citibank, HSBC, BOCHK, etc.) are not allowed. Scrape https://www3.hkexnews.hk/sdw/search/searchsdw.aspx or POST /api/ownership/ingest with named top_buyers/top_sellers.";
+    }
+    return null;
+  }
+  const hasUsFigures =
+    row.inst_holding_pct != null ||
+    row.insider_holding_pct != null ||
+    row.short_interest_pct != null ||
+    row.net_insider_usd != null;
+  if (named.length === 0 && !hasUsFigures) {
+    return "Rejected: US snapshot needs 13F/Form 4 figures (inst_holding_pct, insider_holding_pct, short_interest_pct, or net_insider_usd) or named 13F holders. Estimated institutional_pct/retail_pct alone is not allowed.";
+  }
+  if (
+    (row.signal_type === "INSIDER_BULLISH" || row.signal_type === "INSIDER_SELLING") &&
+    row.insider_holding_pct == null &&
+    row.net_insider_usd == null
+  ) {
+    return "Rejected: US insider signal requires insider_holding_pct or net_insider_usd from Form 4, not a guessed label.";
+  }
+  return null;
 }
 
 export function parseIngestBody(input: unknown): OwnershipSnapshot[] | { error: string } {
@@ -177,8 +210,8 @@ export function ownershipLlmBrief(snapshots: OwnershipSnapshot[]): string {
         retail_pct: pctDelta(earliest.retail_pct, latest.retail_pct),
         inst_holding_pct: pctDelta(earliest.inst_holding_pct, latest.inst_holding_pct),
       },
-      top_buyers: namedParties(latest.top_buyers).slice(0, 5),
-      top_sellers: namedParties(latest.top_sellers).slice(0, 5),
+      top_buyers: latestNamedFlow(ordered).buyers.slice(0, 5),
+      top_sellers: latestNamedFlow(ordered).sellers.slice(0, 5),
     },
     null,
     2,

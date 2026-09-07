@@ -60,5 +60,9 @@
   <string>/Users/mickeylau/Library/Logs/investmouse-ownership-sync.log</string>
   <key>RunAtLoad</key>
   <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Nice</key>
+  <integer>15</integer>
 </dict>
 </plist>

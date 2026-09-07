@@ -39,8 +39,8 @@ else
 fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Syncing ${#tickers[@]} tickers"
-status=0
+failed=0
 for ticker in "${tickers[@]}"; do
-  "$PYTHON" "$ROOT/scripts/sync_ccass.py" "$ticker" || status=1
+  "$PYTHON" "$ROOT/scripts/sync_ccass.py" "$ticker" || failed=1
 done
-exit "$status"
+exit "$failed"

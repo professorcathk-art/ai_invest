@@ -269,6 +269,9 @@ def build_hk_payload(ticker: str) -> dict:
     inst_then = bucket_pct(prior, "institutional") if prior else None
     retail_then = bucket_pct(prior, "retail") if prior else None
     buyers, sellers = flow_tables(latest, prior) if prior else ([], [])
+    if not buyers and not sellers and latest:
+        ranked = sorted(latest, key=lambda row: row.pct, reverse=True)[:5]
+        buyers = [{"name": row.name, "change_30d": f"{row.pct:.2f}% held"} for row in ranked]
     return {
         "ticker": ticker.upper(),
         "as_of_date": as_of.isoformat(),

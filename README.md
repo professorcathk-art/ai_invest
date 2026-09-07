@@ -39,7 +39,11 @@ Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/.
 
 Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
 
-HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Running a committee review also writes a 3-bullet `smartMoneyInsight` from those snapshots. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates. The iMac weekday job is `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Default names are in `scripts/ownership_tickers.txt` (Hang Seng banks, internet/EV, US mega-cap). Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Running a committee review also writes a 3-bullet `smartMoneyInsight` from those snapshots. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
+
+The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Default names are in `scripts/ownership_tickers.txt`. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
+
+**Agents (Workbuddy / Codex) must not invent holdings.** Write only through `POST /api/ownership/ingest` with `Authorization: Bearer $RESEARCH_INGEST_TOKEN`. Never use `SUPABASE_SERVICE_ROLE_KEY` to upsert estimates. HK rows need named CCASS participants on a trading day; US rows need Yahoo 13F / Form 4 fields. Unsourced writes are rejected by the API **and** a Postgres trigger, with the reject reason in the response body.
 
 ## Scripts
 

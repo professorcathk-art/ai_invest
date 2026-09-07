@@ -21,12 +21,30 @@ export async function POST(request: Request) {
 
   const parsed = parseIngestBody(body);
   if ("error" in parsed) {
-    return Response.json({ error: parsed.error }, { status: 400 });
+    const rejected = /rejected:/i.test(parsed.error);
+    return Response.json(
+      {
+        error: parsed.error,
+        hint: rejected
+          ? "Do not invent holdings. HK rows need named CCASS participants from HKEX; US rows need Yahoo 13F/Form 4 fields. POST /api/ownership/ingest with Bearer RESEARCH_INGEST_TOKEN."
+          : undefined,
+      },
+      { status: 400 },
+    );
   }
 
   const result = await upsertOwnership(parsed);
   if ("error" in result) {
-    return Response.json({ error: result.error }, { status: 503 });
+    const rejected = /rejected:/i.test(result.error);
+    return Response.json(
+      {
+        error: result.error,
+        hint: rejected
+          ? "Do not invent holdings. HK rows need named CCASS participants; US rows need Yahoo 13F/Form 4 fields. Use RESEARCH_INGEST_TOKEN against /api/ownership/ingest — never write estimated percentages with the service role."
+          : undefined,
+      },
+      { status: rejected ? 400 : 503 },
+    );
   }
   return Response.json({ ok: true, written: result.written });
 }

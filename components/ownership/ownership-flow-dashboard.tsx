@@ -172,8 +172,9 @@ export function OwnershipFlowDashboard({
   }
 
   const badge = signalCopy(latest.signal_type, market, t);
-  const instDelta = pctDelta(snapshots[0]?.institutional_pct ?? null, latest.institutional_pct);
-  const retailDelta = pctDelta(snapshots[0]?.retail_pct ?? null, latest.retail_pct);
+  const ordered = sortChronological(snapshots);
+  const instDelta = pctDelta(ordered[0]?.institutional_pct ?? null, latest.institutional_pct);
+  const retailDelta = pctDelta(ordered[0]?.retail_pct ?? null, latest.retail_pct);
   const flow = latestNamedFlow(snapshots);
 
   const hkSummary =

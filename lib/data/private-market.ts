@@ -1,5 +1,4 @@
-const FMP_V4 = "https://financialmodelingprep.com/api/v4";
-const FMP_STABLE = "https://financialmodelingprep.com/stable";
+import { fmpStable } from "./fmp-client";
 
 export interface PrivateDeal {
   id: string;
@@ -11,23 +10,6 @@ export interface PrivateDeal {
   dealSize: string;
   leadInvestors: string;
   url: string;
-}
-
-function fmpKey(): string | undefined {
-  return process.env.FMP_API_KEY;
-}
-
-async function fmpJson(url: string): Promise<unknown> {
-  const key = fmpKey();
-  if (!key) return null;
-  try {
-    const sep = url.includes("?") ? "&" : "?";
-    const res = await fetch(`${url}${sep}apikey=${key}`, { next: { revalidate: 1_800 } });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
 }
 
 function text(value: unknown): string {
@@ -83,12 +65,11 @@ export function parsePrivateDeals(raw: unknown): PrivateDeal[] {
 
 export async function fetchPrivateDeals(): Promise<PrivateDeal[]> {
   const { fetchPrivateDealHeadlines } = await import("./private-deals-rss");
-  const [rss, stable, headlines] = await Promise.all([
-    fmpJson(`${FMP_V4}/mergers-acquisitions-rss-feed?page=0`),
-    fmpJson(`${FMP_STABLE}/mergers-acquisitions?page=0`),
+  const [stable, headlines] = await Promise.all([
+    fmpStable("/mergers-acquisitions-latest?page=0"),
     fetchPrivateDealHeadlines("en"),
   ]);
-  const deals = [...parsePrivateDeals(rss), ...parsePrivateDeals(stable), ...headlines];
+  const deals = [...parsePrivateDeals(stable), ...headlines];
   deals.sort((a, b) => String(b.announcedOn).localeCompare(String(a.announcedOn)));
   const seen = new Set<string>();
   return deals

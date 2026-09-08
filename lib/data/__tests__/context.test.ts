@@ -120,3 +120,68 @@ describe("usable valuation", () => {
     ).toBe(true);
   });
 });
+
+describe("mergeCompanyBooks", () => {
+  it("keeps Yahoo as primary and fills zero statement fields from FMP", async () => {
+    const { mergeCompanyBooks } = await import("../normalize");
+    const quote = {
+      ticker: "NVDA",
+      name: "NVIDIA",
+      exchange: "NASDAQ",
+      price: 100,
+      marketCap: 1,
+      enterpriseValue: 0,
+      pe: 30,
+      evEbitda: null,
+      evRevenue: null,
+      beta: 1,
+      sharesOutstanding: 1,
+      currency: "USD",
+      sector: "Technology",
+    };
+    const year = (n: number, revenue: number, extra: { cash?: number; fcf?: number } = {}) => ({
+      year: n,
+      fiscalDate: `${n}-12-31`,
+      revenue,
+      grossProfit: revenue * 0.7,
+      ebit: revenue * 0.5,
+      ebitda: revenue * 0.55,
+      da: 1,
+      capex: 1,
+      nwc: 1,
+      deltaNwc: 0,
+      taxRate: 0.21,
+      fcf: extra.fcf ?? 0,
+      interestExpense: 0,
+      netIncome: revenue * 0.4,
+      totalDebt: 0,
+      cash: extra.cash ?? 0,
+      equity: 10,
+      shares: 1,
+      roic: null,
+    });
+    const defaults = { riskFreeRate: 0.045, equityRiskPremium: 0.05, costOfDebt: 0.065, taxRate: 0.21 };
+    const yahoo = {
+      quote,
+      years: [year(2022, 10), year(2023, 20), year(2024, 30, { fcf: 0 })],
+      source: "yahoo" as const,
+      warnings: [],
+      defaults,
+    };
+    const fmp = {
+      quote: { ...quote, price: 0, enterpriseValue: 50, pe: null, name: "NVIDIA Corp" },
+      years: [year(2022, 10, { cash: 5 }), year(2023, 20, { cash: 8 }), year(2024, 30, { cash: 12, fcf: 9 })],
+      source: "fmp" as const,
+      warnings: [],
+      defaults,
+    };
+    const merged = mergeCompanyBooks(yahoo, fmp);
+    expect(merged?.source).toBe("yahoo");
+    expect(merged?.quote.price).toBe(100);
+    expect(merged?.quote.pe).toBe(30);
+    expect(merged?.quote.enterpriseValue).toBe(50);
+    expect(merged?.years.find((y) => y.year === 2024)?.fcf).toBe(9);
+    expect(merged?.years.find((y) => y.year === 2024)?.cash).toBe(12);
+    expect(merged?.warnings.some((w) => /Financial Modeling Prep/.test(w))).toBe(true);
+  });
+});

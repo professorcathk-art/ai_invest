@@ -7,6 +7,7 @@ import {
 import { hashAssumptions, hashPersonas } from "@/lib/data/analysis-cache";
 import { classifyHeadline } from "@/lib/data/industry-sectors";
 import { parseSegmentPayload } from "@/lib/data/segments";
+import { fmpStatementYear } from "@/lib/data/fmp";
 import { parsePrivateDeals } from "@/lib/data/private-market";
 
 describe("selected personas", () => {
@@ -45,12 +46,31 @@ describe("sourced dashboards", () => {
     expect(parseSegmentPayload(null).slices).toEqual([]);
   });
 
+  it("reads the FMP stable { data: { Product: number } } map", () => {
+    const parsed = parseSegmentPayload([
+      {
+        date: "2025-01-26",
+        fiscalYear: 2025,
+        data: { Gaming: 11_300_000_000, "Data Center": 115_200_000_000, Automotive: 1_700_000_000 },
+      },
+    ]);
+    expect(parsed.slices[0]?.name).toBe("Data Center");
+    expect(parsed.slices).toHaveLength(3);
+    expect(parsed.period).toBe("2025-01-26");
+  });
+
   it("does not invent private deals from empty feeds", () => {
     expect(parsePrivateDeals(null)).toEqual([]);
     expect(parsePrivateDeals([{ companyName: "" }])).toEqual([]);
     expect(parsePrivateDeals([{ targetedCompanyName: "Acme", companyName: "Buyer", transactionValue: 2e9 }])[0]?.target).toBe(
       "Acme",
     );
+  });
+
+  it("reads fiscalYear or the statement date when calendarYear is missing", () => {
+    expect(fmpStatementYear({ fiscalYear: "2025", date: "2025-01-26" })).toBe(2025);
+    expect(fmpStatementYear({ date: "2024-01-28" })).toBe(2024);
+    expect(fmpStatementYear({ calendarYear: 0, date: "2023-01-29" })).toBe(2023);
   });
 
   it("tags tariff headlines as at-risk without inventing a quote", () => {

@@ -1,6 +1,7 @@
 import type { Locale } from "@/lib/i18n/messages";
-import { isHkTicker, normalizeSymbol } from "./normalize";
 import type { NewsItem } from "./context";
+import { fmpStable } from "./fmp-client";
+import { isHkTicker, normalizeSymbol } from "./normalize";
 
 export const CATALYST_TYPES = ["earnings", "buyback", "product", "regulatory", "other"] as const;
 export const CATALYST_IMPACTS = ["bullish", "bearish", "volatility"] as const;
@@ -125,34 +126,27 @@ async function fetchFmpDividends(ticker: string): Promise<{
   metrics: Partial<DividendMetrics>;
   history: DividendHistoryRow[];
 } | null> {
-  const key = process.env.FMP_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch(
-      `https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/${encodeURIComponent(ticker)}?apikey=${key}`,
-      { next: { revalidate: 3600 } },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as { historical?: Array<{ date?: string; adjDividend?: number; dividend?: number }> };
-    const rows = Array.isArray(json.historical) ? json.historical : [];
-    if (rows.length === 0) return null;
-    const byYear = new Map<number, number>();
-    for (const row of rows) {
-      const date = dateOnly(row.date);
-      const dps = num(row.adjDividend ?? row.dividend);
-      if (!date || dps == null || dps <= 0) continue;
-      const year = Number(date.slice(0, 4));
-      byYear.set(year, (byYear.get(year) ?? 0) + dps);
-    }
-    const history = historyFromMap(byYear);
-    const latest = rows.find((row) => dateOnly(row.date));
-    return {
-      metrics: { exDividendDate: dateOnly(latest?.date), annualDps: history[0]?.dps ?? null },
-      history,
-    };
-  } catch {
-    return null;
+  const json = await fmpStable<
+    | Array<{ date?: string; adjDividend?: number; dividend?: number }>
+    | { historical?: Array<{ date?: string; adjDividend?: number; dividend?: number }> }
+  >(`/dividends?symbol=${encodeURIComponent(ticker)}`);
+  const rows = Array.isArray(json) ? json : Array.isArray(json?.historical) ? json.historical : [];
+  if (rows.length === 0) return null;
+  const byYear = new Map<number, number>();
+  for (const row of rows) {
+    const date = dateOnly(row.date);
+    const dps = num(row.adjDividend ?? row.dividend);
+    if (!date || dps == null || dps <= 0) continue;
+    const year = Number(date.slice(0, 4));
+    byYear.set(year, (byYear.get(year) ?? 0) + dps);
   }
+  const history = historyFromMap(byYear);
+  if (history.length === 0) return null;
+  const latest = rows.find((row) => dateOnly(row.date));
+  return {
+    metrics: { exDividendDate: dateOnly(latest?.date), annualDps: history[0]?.dps ?? null },
+    history,
+  };
 }
 
 export async function fetchLiveDividendPack(

@@ -7,14 +7,15 @@ Multi-persona VC/PE valuation engine. Deterministic TypeScript DCF / LBO / VC mo
 ```bash
 cp .env.example .env.local
 # optional: FMP_API_KEY, DEEPSEEK_API_KEY, Supabase keys
-# cheapest completeness upgrade: FMP starter (~$15–20/mo) for statements + product/geo pies
+# FMP_API_KEY: free key uses FMP *stable* API as Yahoo backup (US books, pies, M&A).
+# HK statements / HK pies / FMP news / FMP 13F need a paid FMP plan.
 npm install
 npm run dev
 ```
 
 The app does not serve demo or fixture books in the UI. If Yahoo / FMP return nothing usable, ticker load fails instead of inventing statements.
 
-For HK names like `0005.HK`, add a **Financial Modeling Prep** key or the books stay incomplete (Yahoo often omits statements). The UI will not invent 0 / −100% scores until books are usable.
+Yahoo is the primary quote and statement source. With `FMP_API_KEY`, FMP **fills zero / missing fields** (and US product/geo pies plus structured M&A). New FMP keys cannot call legacy `/api/v3` (403 after 31 Aug 2025); the app uses `https://financialmodelingprep.com/stable/...`. Hong Kong annual reports are still a **paid** FMP endpoint — those books stay on Yahoo + HKEX CCASS.
 
 ### Vercel environment (Production)
 
@@ -24,7 +25,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | Yes for IC | Platform key from DeepSeek |
 | `DEEPSEEK_MODEL` | Recommended | Use `deepseek-v4-flash` (fast). `deepseek-v4-pro` often exceeds Hobby’s 60s limit |
-| `FMP_API_KEY` | Recommended | Free signup (no card) at [FMP register](https://site.financialmodelingprep.com/register). Copy the key from the [dashboard](https://site.financialmodelingprep.com/developer/docs/dashboard). Needed for 5-year statements, product/geo pies, structured M&A. Starter (~$22/mo) unlocks HK + segments. |
+| `FMP_API_KEY` | Recommended | Free signup at [FMP register](https://site.financialmodelingprep.com/register). Copy from the [dashboard](https://site.financialmodelingprep.com/developer/docs/dashboard) **and set the same key on Vercel**. Free tier: US statement backup, US pies, M&A, dividends. Paid starter unlocks HK books / HK pies. FMP news and 13F stay restricted on free keys — Yahoo RSS + live 13F / iMac CCASS cover those. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | `https://uggnftvqtqiilxapysnt.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | JWT starting `eyJ…` role `anon` (not only `sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | JWT starting `eyJ…` role `service_role` |
@@ -36,13 +37,13 @@ Investor writing style lives in `lib/llm/lenses.ts` — edit that file to change
 
 ### Public sources (no new paid API)
 
-Headlines come from **Yahoo Finance ticker RSS**, **Google News** (Reuters / MarketWatch site filters), plus sector tape from Reuters, CNBC, BBC Business, and SCMP. Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news and product/geo pies. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
+Headlines come from **Yahoo Finance ticker RSS**, **Google News** (Reuters / MarketWatch site filters), plus sector tape from Reuters, CNBC, BBC Business, and SCMP. Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` fills missing US statement fields, US product/geo pies, dividend history, and structured M&A. Free keys cannot call FMP news or 13F; those stay Yahoo / CCASS. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
 
 **Cheap ways to make tabs look complete (do not invent figures):**
 
 | Gap | Free / cheap source |
 | --- | --- |
-| 5-year statements, HK books, **一圖讀懂** pies | [FMP starter](https://site.financialmodelingprep.com/developer/docs) — best single paid key |
+| 5-year US statements, US **一圖讀懂** pies, M&A | Free `FMP_API_KEY` (stable API). HK books / HK pies need [FMP starter](https://site.financialmodelingprep.com/developer/docs) |
 | Extra US headlines | [Finnhub](https://finnhub.io) free tier, or keep the new RSS mix |
 | US 13F / Form 4 | Already live via Yahoo on IC / 機構動向 (`?refresh=1`). Official bulk: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar) (free) |
 | HK CCASS named brokers | Official [HKEX CCASS](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx) via the weekday iMac job — no cheap third-party substitute |

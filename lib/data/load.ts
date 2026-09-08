@@ -1,9 +1,10 @@
 import type { CompanyFinancials } from "@/lib/engines/types";
 import { FIXTURE_SEARCH } from "./fixtures";
+import { fmpKey } from "./fmp-client";
 import { fetchFmpCompany, searchFmp, type SearchHit } from "./fmp";
 import { fetchYahooCompany, searchYahoo } from "./yahoo";
 import { readCachedFinancials, writeCachedFinancials } from "./cache";
-import { isUsableFinancials, normalizeSymbol } from "./normalize";
+import { isHkTicker, isUsableFinancials, mergeCompanyBooks, normalizeSymbol } from "./normalize";
 
 export async function searchTickers(query: string): Promise<SearchHit[]> {
   const q = query.trim();
@@ -22,13 +23,27 @@ export async function searchTickers(query: string): Promise<SearchHit[]> {
   return [...merged.values()].slice(0, 8);
 }
 
+function alreadyTriedFmp(warnings: string[]): boolean {
+  return warnings.some((w) => /filled from Financial Modeling Prep/i.test(w));
+}
+
 export async function loadCompany(symbol: string): Promise<CompanyFinancials> {
   const ticker = normalizeSymbol(symbol);
   const cached = await readCachedFinancials(ticker);
-  if (cached && cached.source !== "fixture") return cached;
+  if (cached && cached.source !== "fixture") {
+    if (!fmpKey()) return cached;
+    if (alreadyTriedFmp(cached.warnings)) return cached;
+    if (isHkTicker(ticker) && isUsableFinancials(cached)) return cached;
+  }
 
-  const live = (await fetchFmpCompany(ticker)) ?? (await fetchYahooCompany(ticker));
+  const [yahoo, fmp] = await Promise.all([
+    cached && cached.source !== "fixture" ? Promise.resolve(cached) : fetchYahooCompany(ticker),
+    fetchFmpCompany(ticker),
+  ]);
+  const live = mergeCompanyBooks(yahoo, fmp);
   if (live && isUsableFinancials(live)) {
+    live.warnings = live.warnings.filter((w) => !/FMP backup not available/i.test(w));
+    if (!fmp && isHkTicker(ticker)) live.warnings.push("FMP backup not available for this listing.");
     await writeCachedFinancials(live);
     return live;
   }

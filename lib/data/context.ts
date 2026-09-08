@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/i18n/messages";
+import { fmpStable } from "./fmp-client";
 import { isHkTicker, normalizeSymbol } from "./normalize";
 
 export interface NewsItem {
@@ -52,20 +53,6 @@ export function isTickerRelatedHeadline(title: string, ticker: string, name: str
   return tokens.some((tok) => t.includes(tok));
 }
 
-async function fmpJson<T>(path: string): Promise<T | null> {
-  const key = process.env.FMP_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch(`https://financialmodelingprep.com/api/v3${path}&apikey=${key}`, {
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
 async function parseRss(url: string, publisher: string): Promise<NewsItem[]> {
   const { parseRss: parse } = await import("./rss");
   return parse(url, publisher, 8);
@@ -87,19 +74,6 @@ async function googleNewsRss(ticker: string, name: string, locale: Locale): Prom
     "Google News",
   );
   return items.filter((item) => isTickerRelatedHeadline(item.title, ticker, name));
-}
-
-async function fmpNews(symbol: string): Promise<NewsItem[]> {
-  const rows = await fmpJson<
-    Array<{ title?: string; text?: string; site?: string; url?: string; publishedDate?: string }>
-  >(`/stock_news?tickers=${encodeURIComponent(symbol)}&limit=8`);
-  if (!Array.isArray(rows)) return [];
-  return rows.slice(0, 8).map((row) => ({
-    title: row.title || row.text || "Untitled",
-    publisher: row.site || "FMP",
-    url: row.url || "",
-    publishedAt: row.publishedDate ?? null,
-  }));
 }
 
 function pushHighlight(list: CompanyHighlight[], label: string, value: unknown) {
@@ -302,7 +276,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
     // Public context is optional.
   }
 
-  const fmpProfile = await fmpJson<
+  const fmpProfile = await fmpStable<
     Array<{
       description?: string;
       sector?: string;
@@ -313,7 +287,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
       website?: string;
       companyName?: string;
     }>
-  >(`/profile/${encodeURIComponent(ticker)}?`);
+  >(`/profile?symbol=${encodeURIComponent(ticker)}`);
   const fp = Array.isArray(fmpProfile) ? fmpProfile[0] : undefined;
   if (fp) {
     companyName = fp.companyName || companyName;
@@ -332,11 +306,6 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
     extraCompanyRss(ticker, companyName, locale),
   ]);
   news.push(...google, ...extra);
-
-  if (news.length < 4) {
-    const extras = await fmpNews(ticker);
-    news.push(...extras.filter((item) => isTickerRelatedHeadline(item.title, ticker, companyName)));
-  }
 
   for (const link of filingLinks(ticker, companyName)) pushRef(references, link);
 

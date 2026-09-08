@@ -1,5 +1,6 @@
 import type { Locale } from "@/lib/i18n/messages";
 import type { CompanyContext, NewsItem } from "./context";
+import { fmpStable } from "./fmp-client";
 
 export interface SegmentSlice {
   name: string;
@@ -31,26 +32,6 @@ export interface BusinessBreakdown {
   sourced: boolean;
 }
 
-const FMP_V3 = "https://financialmodelingprep.com/api/v3";
-const FMP_V4 = "https://financialmodelingprep.com/api/v4";
-
-function fmpKey(): string | undefined {
-  return process.env.FMP_API_KEY;
-}
-
-async function fmpJson(url: string): Promise<unknown> {
-  const key = fmpKey();
-  if (!key) return null;
-  try {
-    const sep = url.includes("?") ? "&" : "?";
-    const res = await fetch(`${url}${sep}apikey=${key}`, { next: { revalidate: 3_600 } });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -60,6 +41,7 @@ function numericEntries(row: Record<string, unknown>): Array<[string, number]> {
     "date",
     "symbol",
     "calendarYear",
+    "fiscalYear",
     "period",
     "reportedCurrency",
     "cik",
@@ -109,6 +91,11 @@ export function parseSegmentPayload(raw: unknown): { period: string | null; slic
       continue;
     }
     if (!isRecord(row)) continue;
+
+    if (isRecord(row.data) && numericEntries(row.data).length) {
+      consider(String(row.date ?? row.fiscalYear ?? row.calendarYear ?? ""), numericEntries(row.data));
+      continue;
+    }
 
     if (typeof row.date === "string" || typeof row.calendarYear === "string") {
       consider(String(row.date ?? row.calendarYear), numericEntries(row));
@@ -210,18 +197,12 @@ export async function fetchCompanySegments(ticker: string): Promise<{
   period: string | null;
 }> {
   const symbol = encodeURIComponent(ticker);
-  const [productV4, geoV4, productV3, geoV3] = await Promise.all([
-    fmpJson(`${FMP_V4}/revenue-product-segmentation?symbol=${symbol}&structure=flat`),
-    fmpJson(`${FMP_V4}/revenue-geographic-segmentation?symbol=${symbol}&structure=flat`),
-    fmpJson(`${FMP_V3}/revenue-product-segmentation/${ticker}`),
-    fmpJson(`${FMP_V3}/revenue-geographic-segmentation/${ticker}`),
+  const [product, geo] = await Promise.all([
+    fmpStable(`/revenue-product-segmentation?symbol=${symbol}`),
+    fmpStable(`/revenue-geographic-segmentation?symbol=${symbol}`),
   ]);
-  const products = parseSegmentPayload(productV4).slices.length
-    ? parseSegmentPayload(productV4)
-    : parseSegmentPayload(productV3);
-  const geos = parseSegmentPayload(geoV4).slices.length
-    ? parseSegmentPayload(geoV4)
-    : parseSegmentPayload(geoV3);
+  const products = parseSegmentPayload(product);
+  const geos = parseSegmentPayload(geo);
   return {
     products: products.slices,
     geos: geos.slices,

@@ -35,6 +35,7 @@ export interface RawYear {
   year?: number;
   date?: string;
   calendarYear?: number | string;
+  fiscalYear?: number | string;
   revenue?: number;
   grossProfit?: number;
   ebit?: number;
@@ -62,7 +63,7 @@ export function mergeRawYears(groups: Array<RawYear[] | null | undefined>): RawY
   const byYear = new Map<number, RawYear>();
   for (const rows of groups) {
     for (const row of rows ?? []) {
-      const year = num(row.calendarYear ?? row.year ?? (row.date ? new Date(row.date).getFullYear() : 0));
+      const year = num(row.fiscalYear ?? row.calendarYear ?? row.year ?? (row.date ? new Date(row.date).getFullYear() : 0));
       if (year < 1990) continue;
       const cur = byYear.get(year) ?? { year, calendarYear: year };
       for (const [key, value] of Object.entries(row)) {
@@ -84,7 +85,7 @@ export function mergeRawYears(groups: Array<RawYear[] | null | undefined>): RawY
 export function assembleYears(raw: RawYear[], taxFallback: number, warnings: string[]): StatementYear[] {
   const sorted = [...raw]
     .map((r) => ({
-      year: num(r.calendarYear ?? r.year ?? (r.date ? new Date(r.date).getFullYear() : 0)),
+      year: num(r.fiscalYear ?? r.calendarYear ?? r.year ?? (r.date ? new Date(r.date).getFullYear() : 0)),
       fiscalDate: r.date ?? `${r.calendarYear ?? r.year}-12-31`,
       revenue: num(r.revenue),
       grossProfit: num(r.grossProfit),
@@ -224,6 +225,77 @@ export function usableStatementYears(years: CompanyFinancials["years"]): Company
     run.push(y);
   }
   return (run.length ? run : complete).slice(-5);
+}
+
+function preferNumber(primary: number, backup: number): number {
+  return primary !== 0 && Number.isFinite(primary) ? primary : backup;
+}
+
+export function mergeCompanyBooks(
+  primary: CompanyFinancials | null,
+  backup: CompanyFinancials | null,
+): CompanyFinancials | null {
+  if (!primary) return backup;
+  if (!backup) return primary;
+  const byYear = new Map<number, StatementYear>();
+  for (const year of backup.years) byYear.set(year.year, { ...year });
+  for (const year of primary.years) {
+    const other = byYear.get(year.year);
+    if (!other) {
+      byYear.set(year.year, { ...year });
+      continue;
+    }
+    byYear.set(year.year, {
+      ...other,
+      ...year,
+      revenue: preferNumber(year.revenue, other.revenue),
+      grossProfit: preferNumber(year.grossProfit, other.grossProfit),
+      ebit: preferNumber(year.ebit, other.ebit),
+      ebitda: preferNumber(year.ebitda, other.ebitda),
+      da: preferNumber(year.da, other.da),
+      capex: preferNumber(year.capex, other.capex),
+      nwc: preferNumber(year.nwc, other.nwc),
+      deltaNwc: preferNumber(year.deltaNwc, other.deltaNwc),
+      fcf: preferNumber(year.fcf, other.fcf),
+      interestExpense: preferNumber(year.interestExpense, other.interestExpense),
+      netIncome: preferNumber(year.netIncome, other.netIncome),
+      totalDebt: preferNumber(year.totalDebt, other.totalDebt),
+      cash: preferNumber(year.cash, other.cash),
+      equity: preferNumber(year.equity, other.equity),
+      shares: preferNumber(year.shares, other.shares),
+      roic: year.roic ?? other.roic,
+    });
+  }
+  const years = [...byYear.values()].sort((a, b) => a.year - b.year);
+  const q = primary.quote;
+  const b = backup.quote;
+  const quote: Quote = {
+    ...b,
+    ...q,
+    ticker: q.ticker,
+    name: q.name || b.name,
+    exchange: q.exchange || b.exchange,
+    price: preferNumber(q.price, b.price),
+    marketCap: preferNumber(q.marketCap, b.marketCap),
+    enterpriseValue: preferNumber(q.enterpriseValue, b.enterpriseValue),
+    pe: q.pe ?? b.pe,
+    evEbitda: q.evEbitda ?? b.evEbitda,
+    evRevenue: q.evRevenue ?? b.evRevenue,
+    beta: preferNumber(q.beta, b.beta),
+    sharesOutstanding: preferNumber(q.sharesOutstanding, b.sharesOutstanding),
+    currency: q.currency || b.currency,
+    sector: q.sector || b.sector,
+  };
+  const warnings = [...primary.warnings];
+  if (backup.source === "fmp") warnings.push("Missing Yahoo statement fields were filled from Financial Modeling Prep.");
+  const merged: CompanyFinancials = {
+    quote,
+    years,
+    source: isUsableFinancials(primary) ? primary.source : backup.source,
+    warnings: [...new Set(warnings)],
+    defaults: primary.defaults,
+  };
+  return merged;
 }
 
 export function finalizeCompany(

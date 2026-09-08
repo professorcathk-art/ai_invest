@@ -218,7 +218,7 @@ def fetch_with_lookback(stock_code: str, lookback_days: int = 21) -> tuple[date,
     prior_date = _business_days_back(as_of, lookback_days)
     prior_rows: list[CcassRow] = []
     found: date | None = None
-    for offset in range(0, 8):
+    for offset in range(0, 4):
         trial = prior_date - timedelta(days=offset)
         if trial.weekday() >= 5:
             continue

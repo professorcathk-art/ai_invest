@@ -148,7 +148,7 @@ export const messages = {
     businessRoadmap: "Sourced strategy headlines",
     businessEmpty: "No sourced segment mix for this ticker.",
     businessEmptyHint:
-      "Pie charts need FMP_API_KEY (starter is enough). Product cards and strategy headlines still fill from the Yahoo company description and public RSS. Nothing is invented.",
+      "US pies fill from FMP when the key is present. Hong Kong product mix needs a paid FMP plan. Product cards and strategy headlines still come from Yahoo and public RSS. Nothing is invented.",
     industryTitle: "Top-down sector research",
     industrySubtitle:
       "Daily headlines from Yahoo, Google News, Reuters, CNBC, BBC/SCMP, plus a public-name watchlist. Impact tags come from the headline text — no invented commentary.",
@@ -357,7 +357,7 @@ export const messages = {
     businessProducts: "核心產品與服務",
     businessRoadmap: "已來源的策略新聞",
     businessEmpty: "此股份暫無來源分部結構。",
-    businessEmptyHint: "餅圖需要 FMP_API_KEY（入門方案即可）。產品卡與策略新聞仍會來自 Yahoo 公司簡介與公開 RSS，不會臆造占比。",
+    businessEmptyHint: "已接上 FMP 金鑰時，美國股份的產品／地區餅圖會自動補上；港股分部需付費方案。產品卡與策略新聞仍來自 Yahoo 公司簡介與公開 RSS，不會臆造占比。",
     industryTitle: "Top-Down 行業研報",
     industrySubtitle: "來源包括 Yahoo、Google 新聞、路透、CNBC、BBC／南華早報，以及觀察名單。影響標籤只來自標題文字，不會臆造評論。",
     sectorAi: "人工智能與半導體",

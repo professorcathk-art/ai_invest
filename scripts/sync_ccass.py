@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import os
+import signal
+import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+
+socket.setdefaulttimeout(60)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -71,11 +75,20 @@ def fetch_and_push(ticker: str = "9988.HK") -> int:
         print("INVESTMOUSE_API_URL is not set.")
         return 2
 
+    def _alarm(_signum, _frame):
+        raise TimeoutError(f"{ticker} exceeded 120s")
+
+    if hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, _alarm)
+        signal.alarm(120)
     try:
         payload = build_payload(ticker)
     except Exception as exc:  # noqa: BLE001 — operator log
         print(f"[{datetime.now(timezone.utc).isoformat()}] Fetch failed for {ticker}: {exc}")
         return 1
+    finally:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
 
     if not has_real_metrics(payload):
         print(

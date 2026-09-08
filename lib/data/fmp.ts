@@ -1,27 +1,14 @@
 import type { CompanyFinancials } from "@/lib/engines/types";
+import { fmpKey, fmpStable } from "./fmp-client";
 import {
   assembleYears,
   buildQuote,
+  defaultTaxRate,
   finalizeCompany,
   mergeRawYears,
   normalizeSymbol,
   type RawYear,
 } from "./normalize";
-
-const BASE = "https://financialmodelingprep.com/api/v3";
-
-function key(): string | undefined {
-  return process.env.FMP_API_KEY;
-}
-
-async function fmp<T>(path: string): Promise<T | null> {
-  const apikey = key();
-  if (!apikey) return null;
-  const url = `${BASE}${path}${path.includes("?") ? "&" : "?"}apikey=${apikey}`;
-  const res = await fetch(url, { next: { revalidate: 300 } });
-  if (!res.ok) return null;
-  return (await res.json()) as T;
-}
 
 export interface SearchHit {
   symbol: string;
@@ -29,59 +16,84 @@ export interface SearchHit {
   exchange: string;
 }
 
+export function fmpStatementYear(rec: Record<string, unknown>): number {
+  const direct = Number(rec.fiscalYear ?? rec.calendarYear ?? rec.year ?? 0);
+  if (direct > 1990) return direct;
+  const date = String(rec.date ?? rec.filingDate ?? rec.fillingDate ?? "");
+  const y = Number(date.slice(0, 4));
+  return y > 1990 ? y : 0;
+}
+
+function asRows(raw: unknown): RawYear[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      const rec = (row ?? {}) as Record<string, unknown>;
+      const year = fmpStatementYear(rec);
+      return { ...rec, year, calendarYear: year } as RawYear;
+    })
+    .filter((row) => Number(row.year) > 1990);
+}
+
 export async function searchFmp(query: string): Promise<SearchHit[]> {
-  const rows = await fmp<Array<{ symbol: string; name: string; exchangeShortName?: string; stockExchange?: string }>>(
-    `/search?query=${encodeURIComponent(query)}&limit=8`,
+  const rows = await fmpStable<Array<{ symbol?: string; name?: string; exchange?: string; exchangeFullName?: string }>>(
+    `/search-symbol?query=${encodeURIComponent(query)}&limit=8`,
   );
   if (!Array.isArray(rows)) return [];
-  return rows.map((r) => ({
-    symbol: r.symbol,
-    name: r.name,
-    exchange: r.exchangeShortName ?? r.stockExchange ?? "",
-  }));
+  return rows
+    .filter((r) => r.symbol)
+    .map((r) => ({
+      symbol: String(r.symbol),
+      name: String(r.name ?? r.symbol),
+      exchange: String(r.exchange ?? r.exchangeFullName ?? ""),
+    }));
 }
 
 export async function fetchFmpCompany(symbol: string): Promise<CompanyFinancials | null> {
-  if (!key()) return null;
+  if (!fmpKey()) return null;
   const ticker = normalizeSymbol(symbol);
   const warnings: string[] = [];
+  const encoded = encodeURIComponent(ticker);
 
-  const [income, balance, cash, quoteRows, profileRows, metrics] = await Promise.all([
-    fmp<RawYear[]>(`/income-statement/${ticker}?period=annual&limit=8`),
-    fmp<RawYear[]>(`/balance-sheet-statement/${ticker}?period=annual&limit=8`),
-    fmp<RawYear[]>(`/cash-flow-statement/${ticker}?period=annual&limit=8`),
-    fmp<Array<Record<string, unknown>>>(`/quote/${ticker}`),
-    fmp<Array<Record<string, unknown>>>(`/profile/${ticker}`),
-    fmp<Array<Record<string, unknown>>>(`/key-metrics/${ticker}?period=annual&limit=8`),
+  const income = await fmpStable<unknown>(`/income-statement?symbol=${encoded}&period=FY&limit=5`);
+  const incomeRows = asRows(income);
+  if (incomeRows.length === 0) return null;
+
+  const [balance, cash, quoteRows, profileRows, metrics] = await Promise.all([
+    fmpStable<unknown>(`/balance-sheet-statement?symbol=${encoded}&period=FY&limit=5`),
+    fmpStable<unknown>(`/cash-flow-statement?symbol=${encoded}&period=FY&limit=5`),
+    fmpStable<Array<Record<string, unknown>>>(`/quote?symbol=${encoded}`),
+    fmpStable<Array<Record<string, unknown>>>(`/profile?symbol=${encoded}`),
+    fmpStable<Array<Record<string, unknown>>>(`/key-metrics?symbol=${encoded}&period=FY&limit=5`),
   ]);
 
-  if (!income || !Array.isArray(income) || income.length === 0) return null;
-
-  const merged = mergeRawYears([income, balance, cash]);
-  if (metrics) {
+  const merged = mergeRawYears([incomeRows, asRows(balance), asRows(cash)]);
+  if (Array.isArray(metrics)) {
     for (const m of metrics) {
-      const year = Number(m.calendarYear ?? m.year ?? 0);
+      const year = fmpStatementYear(m);
       const existing = merged.find((row) => Number(row.year ?? row.calendarYear) === year);
-      if (existing && Number(m.roic ?? 0)) existing.roic = Number(m.roic);
+      const roic = Number(m.returnOnInvestedCapital ?? m.roic ?? 0);
+      if (existing && roic) existing.roic = Math.abs(roic) > 2 ? roic / 100 : roic;
     }
   }
 
-  const { defaultTaxRate } = await import("./normalize");
   const years = assembleYears(merged, defaultTaxRate(ticker), warnings);
+  if (years.length === 0) return null;
   const q = quoteRows?.[0] ?? {};
   const p = profileRows?.[0] ?? {};
   const last = years.at(-1);
+  const m0 = metrics?.[0] ?? {};
 
   const quote = buildQuote(
     ticker,
     {
       name: String(p.companyName ?? q.name ?? ticker),
-      exchange: String(p.exchangeShortName ?? ""),
+      exchange: String(p.exchange ?? p.exchangeFullName ?? q.exchange ?? ""),
       price: Number(q.price ?? p.price ?? 0),
-      marketCap: Number(q.marketCap ?? p.mktCap ?? 0),
-      enterpriseValue: Number((metrics?.[0] as { enterpriseValue?: number } | undefined)?.enterpriseValue ?? 0),
+      marketCap: Number(q.marketCap ?? p.marketCap ?? 0),
+      enterpriseValue: Number(m0.enterpriseValue ?? 0),
       pe: Number(q.pe ?? 0) || null,
-      evEbitda: Number((metrics?.[0] as { enterpriseValueOverEBITDA?: number } | undefined)?.enterpriseValueOverEBITDA ?? 0) || null,
+      evEbitda: Number(m0.evToEBITDA ?? m0.enterpriseValueOverEBITDA ?? 0) || null,
       beta: Number(p.beta ?? 1),
       sharesOutstanding: Number(q.sharesOutstanding ?? last?.shares ?? 0),
       currency: String(p.currency ?? "USD"),

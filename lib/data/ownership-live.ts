@@ -1,8 +1,9 @@
 import { normalizeSymbol } from "./normalize";
 import {
-  marketFromTicker,
-  namedParties,
+  hasNamedHkCcass,
+  mergeLiveOwnership,
   parseOwnershipRecord,
+  preferredOwnershipMarket,
   type OwnershipSnapshot,
 } from "./ownership";
 import { listOwnership, upsertOwnership } from "./ownership-store";
@@ -50,6 +51,14 @@ export function buildYahooOwnershipSnapshot(
     if (change > 0) buyers.push(item);
     else if (change < 0) sellers.push(item);
   }
+  if (buyers.length === 0 && sellers.length === 0) {
+    for (const holder of holders.slice(0, 5)) {
+      const name = String(holder.organization ?? "").trim();
+      if (!name) continue;
+      const held = toPct(rawNum((holder.pctHeld as { raw?: unknown }) ?? holder.pctHeld));
+      buyers.push({ name, change_30d: held != null ? `${held.toFixed(1)}% held` : "—" });
+    }
+  }
   let net = 0;
   const txns =
     ((block.insiderTransactions as { transactions?: Array<Record<string, unknown>> } | undefined)
@@ -93,13 +102,7 @@ export async function refreshLiveOwnership(ticker: string): Promise<OwnershipSna
     const snapshot = buildYahooOwnershipSnapshot(symbol, block);
     if (!snapshot) return null;
     const existing = await listOwnership(symbol, 10);
-    const sameDayHkCcass = existing.some(
-      (row) =>
-        row.as_of_date === snapshot.as_of_date &&
-        row.market_type === "HK" &&
-        (namedParties(row.top_buyers).length > 0 || namedParties(row.top_sellers).length > 0),
-    );
-    if (!sameDayHkCcass) {
+    if (!hasNamedHkCcass(existing.filter((row) => row.as_of_date === snapshot.as_of_date))) {
       await upsertOwnership([snapshot]);
     }
     return snapshot;
@@ -111,19 +114,7 @@ export async function refreshLiveOwnership(ticker: string): Promise<OwnershipSna
 export async function refreshThenListOwnership(ticker: string, limit = 30): Promise<OwnershipSnapshot[]> {
   const live = await refreshLiveOwnership(ticker).catch(() => null);
   const listed = await listOwnership(ticker, limit);
-  if (!live) return listed;
-  if (preferredOwnershipMarket(listed, ticker) === "HK") return listed;
-  const already = listed.some((row) => row.as_of_date === live.as_of_date && row.market_type === live.market_type);
-  return already ? listed : [live, ...listed].slice(0, limit);
+  return mergeLiveOwnership(listed, live, limit);
 }
 
-export function preferredOwnershipMarket(snapshots: OwnershipSnapshot[], ticker: string) {
-  const hasHkCcass = snapshots.some(
-    (row) =>
-      row.market_type === "HK" &&
-      (namedParties(row.top_buyers).length > 0 || namedParties(row.top_sellers).length > 0),
-  );
-  if (hasHkCcass) return "HK" as const;
-  if (snapshots.some((row) => row.market_type === "US")) return "US" as const;
-  return marketFromTicker(ticker);
-}
+export { preferredOwnershipMarket, mergeLiveOwnership };

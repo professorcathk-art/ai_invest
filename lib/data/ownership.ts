@@ -243,6 +243,34 @@ export function pctDelta(from: number | null, to: number | null): number | null 
   return to - from;
 }
 
+export function hasNamedHkCcass(snapshots: OwnershipSnapshot[]): boolean {
+  return snapshots.some(
+    (row) =>
+      row.market_type === "HK" &&
+      (namedParties(row.top_buyers).length > 0 || namedParties(row.top_sellers).length > 0),
+  );
+}
+
+export function preferredOwnershipMarket(snapshots: OwnershipSnapshot[], ticker: string) {
+  if (hasNamedHkCcass(snapshots)) return "HK" as const;
+  if (snapshots.some((row) => row.market_type === "US")) return "US" as const;
+  return marketFromTicker(ticker);
+}
+
+/** Keep official CCASS when present; otherwise show the live Yahoo 13F/holder row. */
+export function mergeLiveOwnership(
+  listed: OwnershipSnapshot[],
+  live: OwnershipSnapshot | null,
+  limit = 30,
+): OwnershipSnapshot[] {
+  if (hasNamedHkCcass(listed)) return listed;
+  if (!live) return listed;
+  const already = listed.some(
+    (row) => row.as_of_date === live.as_of_date && row.market_type === live.market_type,
+  );
+  return already ? listed : [live, ...listed].slice(0, limit);
+}
+
 /** Compact facts for the IC / Smart Money LLM. Never invent figures beyond this JSON. */
 export function ownershipLlmBrief(snapshots: OwnershipSnapshot[]): string {
   if (snapshots.length === 0) {

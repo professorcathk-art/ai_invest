@@ -4,7 +4,7 @@ import { readCachedAnalysis, writeCachedAnalysis } from "@/lib/data/analysis-cac
 import { fetchCompanyContext } from "@/lib/data/context";
 import { buildBusinessBreakdown, segmentBrief } from "@/lib/data/segments";
 import { refreshThenListOwnership } from "@/lib/data/ownership-live";
-import { ownershipLlmBrief } from "@/lib/data/ownership";
+import { ownershipLlmBrief, preferredOwnershipMarket } from "@/lib/data/ownership";
 import { generateDebate, generatePersonaNarrative, personasFor } from "@/lib/llm/generate";
 import { fallbackDebate } from "@/lib/llm/debate";
 import { fallbackSmartMoneyInsight, generateSmartMoneyInsight } from "@/lib/llm/insights";
@@ -100,7 +100,13 @@ export async function POST(request: Request) {
         ctx.ownershipBrief = ownershipLlmBrief(snapshots);
         const breakdown = await buildBusinessBreakdown(ticker, ctx).catch(() => null);
         if (breakdown) ctx.segmentBrief = segmentBrief(breakdown, parsed.locale);
-        send({ type: "context", context: ctx, business: breakdown });
+        send({
+          type: "context",
+          context: ctx,
+          business: breakdown,
+          snapshots,
+          ownershipMarket: preferredOwnershipMarket(snapshots, ticker),
+        });
 
         if (cached) {
           send({

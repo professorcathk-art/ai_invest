@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   latestNamedFlow,
   marketFromTicker,
+  mergeLiveOwnership,
   namedParties,
   ownershipIngestStandard,
   parseIngestBody,
   parseOwnershipRecord,
   pctDelta,
+  preferredOwnershipMarket,
   sortChronological,
 } from "../ownership";
-import { buildYahooOwnershipSnapshot, preferredOwnershipMarket } from "../ownership-live";
+import { buildYahooOwnershipSnapshot } from "../ownership-live";
 
 describe("ownership ingest", () => {
   it("infers HK vs US from the ticker", () => {
@@ -166,5 +168,8 @@ describe("live Yahoo ownership", () => {
     if ("error" in hk || "error" in us) return;
     expect(preferredOwnershipMarket([us, hk], "0700.HK")).toBe("HK");
     expect(preferredOwnershipMarket([us], "0700.HK")).toBe("US");
+    expect(mergeLiveOwnership([], us, 30)).toEqual([us]);
+    expect(mergeLiveOwnership([hk], us, 30)).toEqual([hk]);
+    expect(mergeLiveOwnership([], null, 30)).toEqual([]);
   });
 });

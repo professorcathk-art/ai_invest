@@ -40,6 +40,7 @@ import {
   PERSONA_IDS,
   type PersonaId,
 } from "@/lib/llm/persona-ids";
+import { preferredOwnershipMarket, type OwnershipSnapshot } from "@/lib/data/ownership";
 import { pushRecentTicker } from "@/lib/recent-tickers";
 import { readLocalAnalysis, writeLocalAnalysis } from "@/lib/analysis-session";
 
@@ -75,6 +76,11 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
   const [fromCache, setFromCache] = useState<string | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const [ownershipTick, setOwnershipTick] = useState(0);
+  const [ownershipSeed, setOwnershipSeed] = useState<{
+    ticker: string;
+    market: "HK" | "US";
+    snapshots: OwnershipSnapshot[];
+  } | null>(null);
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -88,6 +94,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
   async function loadTicker(symbol: string) {
     setLoading(true);
     setSynthesizeCatalysts(false);
+    setOwnershipSeed(null);
     const local = readLocalAnalysis(symbol, locale);
     if (local?.analysis?.narratives?.length) {
       setAnalysis(local.analysis);
@@ -217,11 +224,21 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
             cachedAt?: string;
             fromCache?: boolean;
             business?: BusinessBreakdown;
+            snapshots?: OwnershipSnapshot[];
+            ownershipMarket?: "HK" | "US";
             error?: string;
           };
           if (event.type === "context" && event.context) {
             setPayload((prev) => (prev ? { ...prev, context: event.context! } : prev));
             if (event.business) setBusiness(event.business);
+            if (event.snapshots) {
+              const symbol = payload.financials.quote.ticker;
+              setOwnershipSeed({
+                ticker: symbol,
+                snapshots: event.snapshots,
+                market: event.ownershipMarket ?? preferredOwnershipMarket(event.snapshots, symbol),
+              });
+            }
           }
           if (event.type === "cached" && event.analysis) {
             setAnalysis(event.analysis);
@@ -493,6 +510,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
                 insight={analysis?.smartMoneyInsight ?? null}
                 insightPending={analyzing && !analysis?.smartMoneyInsight}
                 refreshKey={ownershipTick}
+                seeded={ownershipSeed}
               />
             </TabsContent>
             <TabsContent value="catalysts">

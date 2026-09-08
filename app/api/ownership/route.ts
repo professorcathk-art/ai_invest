@@ -1,5 +1,6 @@
+import { preferredOwnershipMarket } from "@/lib/data/ownership";
 import { listOwnership } from "@/lib/data/ownership-store";
-import { preferredOwnershipMarket, refreshThenListOwnership } from "@/lib/data/ownership-live";
+import { refreshThenListOwnership } from "@/lib/data/ownership-live";
 import { normalizeSymbol } from "@/lib/data/normalize";
 
 export const runtime = "nodejs";
@@ -11,13 +12,15 @@ export async function GET(request: Request) {
     return Response.json({ error: "ticker is required." }, { status: 400 });
   }
   const refresh = url.searchParams.get("refresh") === "1";
-  const snapshots = refresh
-    ? await refreshThenListOwnership(ticker, 30).catch(() => listOwnership(ticker, 30))
-    : await listOwnership(ticker, 30);
+  const listed = await listOwnership(ticker, 30);
+  const snapshots =
+    refresh || listed.length === 0
+      ? await refreshThenListOwnership(ticker, 30).catch(() => listed)
+      : listed;
   return Response.json({
     ticker,
     market: preferredOwnershipMarket(snapshots, ticker),
     snapshots,
-    liveRefreshed: refresh,
+    liveRefreshed: refresh || listed.length === 0,
   });
 }

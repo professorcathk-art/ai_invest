@@ -21,6 +21,7 @@ import { formatCompact } from "@/lib/format";
 import {
   latestNamedFlow,
   pctDelta,
+  preferredOwnershipMarket,
   sortChronological,
   type OwnershipParty,
   type OwnershipSignal,
@@ -127,11 +128,13 @@ export function OwnershipFlowDashboard({
   insight = null,
   insightPending = false,
   refreshKey = 0,
+  seeded = null,
 }: {
   ticker: string;
   insight?: SmartMoneyInsight | null;
   insightPending?: boolean;
   refreshKey?: number;
+  seeded?: { ticker: string; market: "HK" | "US"; snapshots: OwnershipSnapshot[] } | null;
 }) {
   const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
@@ -141,20 +144,35 @@ export function OwnershipFlowDashboard({
     fetch(`/api/ownership?ticker=${encodeURIComponent(ticker)}&refresh=1`)
       .then((res) => res.json())
       .then((json: Payload) => {
-        if (!cancelled) setPayload({ ...json, ticker: json.ticker || ticker });
+        if (cancelled) return;
+        const snapshots = Array.isArray(json.snapshots) ? json.snapshots : [];
+        setPayload({
+          ticker: json.ticker || ticker,
+          market: json.market ?? preferredOwnershipMarket(snapshots, ticker),
+          snapshots,
+        });
       })
       .catch(() => {
-        if (!cancelled) setPayload({ ticker, market: ticker.endsWith(".HK") ? "HK" : "US", snapshots: [] });
+        if (!cancelled) {
+          setPayload({ ticker, market: ticker.endsWith(".HK") ? "HK" : "US", snapshots: [] });
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [ticker, refreshKey]);
 
-  const snapshots = useMemo(() => sortChronological(payload?.snapshots ?? []), [payload]);
+  const display = useMemo(() => {
+    const fromFetch = payload?.ticker === ticker ? payload : null;
+    const fromSeed = seeded?.ticker === ticker && seeded.snapshots.length ? seeded : null;
+    if (fromFetch && fromFetch.snapshots.length) return fromFetch;
+    return fromSeed ?? fromFetch;
+  }, [payload, seeded, ticker]);
+
+  const snapshots = useMemo(() => sortChronological(display?.snapshots ?? []), [display]);
   const latest = snapshots.at(-1) ?? null;
-  const market = payload?.market ?? (ticker.endsWith(".HK") ? "HK" : "US");
-  const loading = !payload || payload.ticker !== ticker;
+  const market = display?.market ?? (ticker.endsWith(".HK") ? "HK" : "US");
+  const loading = !display || display.ticker !== ticker;
 
   if (loading) {
     return (

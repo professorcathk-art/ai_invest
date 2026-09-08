@@ -24,7 +24,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | Yes for IC | Platform key from DeepSeek |
 | `DEEPSEEK_MODEL` | Recommended | Use `deepseek-v4-flash` (fast). `deepseek-v4-pro` often exceeds Hobby’s 60s limit |
-| `FMP_API_KEY` | Recommended | Real 5-year statements, product/geo pies, structured M&A. Starter is enough. |
+| `FMP_API_KEY` | Recommended | Free signup (no card) at [FMP register](https://site.financialmodelingprep.com/register). Copy the key from the [dashboard](https://site.financialmodelingprep.com/developer/docs/dashboard). Needed for 5-year statements, product/geo pies, structured M&A. Starter (~$22/mo) unlocks HK + segments. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | `https://uggnftvqtqiilxapysnt.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | JWT starting `eyJ…` role `anon` (not only `sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | JWT starting `eyJ…` role `service_role` |
@@ -54,7 +54,7 @@ Apply the SQL in `supabase/migrations/` to a Supabase project if you want financ
 
 Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Both pages stay blank when the public feed is empty — no invented sector commentary or fake Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present; product cards still fill from the Yahoo description.
 
-HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…&refresh=1`. **Run IC now also live-fetches Yahoo 13F / holders** and writes a 3-bullet `smartMoneyInsight`. Official HK CCASS names still come from the weekday iMac scrape (unique key is ticker+date, so a same-day Yahoo row will not overwrite named CCASS). **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. **Run IC always live-fetches Yahoo 13F / Form 4 / holders from the web.** If the database has no row (or no named HK CCASS), that live tape is shown on **籌碼與機構動向** immediately. Named HKEX CCASS brokers still win when the weekday iMac job has them; a same-day Yahoo row will not overwrite official CCASS. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
 
 The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Optional hourly RSS warmer: `scripts/sync_public_feeds.sh` + `scripts/com.investmouse.public-feeds.plist` (set `INVESTMOUSE_SITE_URL` to the Vercel URL). Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HKEX pass needs the iMac awake for about 90 minutes. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
 

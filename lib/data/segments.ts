@@ -169,6 +169,21 @@ export function productCardsFromContext(
   }
   const summary = ctx.businessSummary.replace(/\s+/g, " ").trim();
   if (!summary) return [];
+  const listMatch = summary.match(
+    /(?:including|includes|include|comprises|consists of|products? (?:include|are)|業務包括)\s+([^.。]{12,220})/i,
+  );
+  if (listMatch?.[1]) {
+    const parts = listMatch[1]
+      .split(/,|;| and |以及|及|與/)
+      .map((part) => part.replace(/\band\b/gi, "").trim())
+      .filter((part) => part.length > 2 && part.length < 64);
+    if (parts.length >= 2) {
+      return parts.slice(0, 6).map((name) => ({
+        name,
+        description: summary.slice(0, 240),
+      }));
+    }
+  }
   const sentences = summary.split(/(?<=[.。])\s+/).filter((s) => s.length > 40);
   return sentences.slice(0, 3).map((sentence, i) => ({
     name: i === 0 ? "Core business" : `Line ${i + 1}`,

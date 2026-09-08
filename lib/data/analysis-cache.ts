@@ -68,6 +68,36 @@ export async function readCachedAnalysis(input: {
   return { analysis, cachedAt: String(data.created_at) };
 }
 
+export async function readLatestCachedAnalysis(
+  ticker: string,
+  locale?: Locale,
+): Promise<{ analysis: IcAnalysis; cachedAt: string; mode: string } | null> {
+  const db = getSupabaseAdmin();
+  if (!db) return null;
+  const since = new Date(Date.now() - ANALYSIS_CACHE_TTL_MS).toISOString();
+  let query = db
+    .from("cached_analyses")
+    .select("analysis_data, created_at, mode, locale")
+    .eq("ticker", ticker.trim().toUpperCase())
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(8);
+  if (locale) query = query.eq("locale", locale);
+  const { data, error } = await query;
+  if (error || !data?.length) return null;
+  const hit =
+    data.find((row) => {
+      const analysis = row.analysis_data as IcAnalysis | null;
+      return Boolean(analysis?.narratives?.length && analysis.debate?.length);
+    }) ?? null;
+  if (!hit) return null;
+  return {
+    analysis: hit.analysis_data as IcAnalysis,
+    cachedAt: String(hit.created_at),
+    mode: String(hit.mode),
+  };
+}
+
 export async function writeCachedAnalysis(input: {
   ticker: string;
   mode: AnalysisDepth;

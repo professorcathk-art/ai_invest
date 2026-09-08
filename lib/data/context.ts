@@ -67,28 +67,8 @@ async function fmpJson<T>(path: string): Promise<T | null> {
 }
 
 async function parseRss(url: string, publisher: string): Promise<NewsItem[]> {
-  try {
-    const res = await fetch(url, { next: { revalidate: 300 } });
-    if (!res.ok) return [];
-    const xml = await res.text();
-    const items: NewsItem[] = [];
-    const blocks = xml.split(/<item>/i).slice(1);
-    for (const block of blocks) {
-      const title = decodeXml(block.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)?.[1] ?? "");
-      const link = decodeXml(block.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? "");
-      const pub = decodeXml(block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] ?? "");
-      if (!title) continue;
-      items.push({
-        title,
-        publisher,
-        url: link.trim(),
-        publishedAt: pub ? new Date(pub).toISOString() : null,
-      });
-    }
-    return items.slice(0, 8);
-  } catch {
-    return [];
-  }
+  const { parseRss: parse } = await import("./rss");
+  return parse(url, publisher, 8);
 }
 
 async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
@@ -107,17 +87,6 @@ async function googleNewsRss(ticker: string, name: string, locale: Locale): Prom
     "Google News",
   );
   return items.filter((item) => isTickerRelatedHeadline(item.title, ticker, name));
-}
-
-function decodeXml(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
 }
 
 async function fmpNews(symbol: string): Promise<NewsItem[]> {
@@ -210,16 +179,30 @@ function filingLinks(ticker: string, name: string): SourceRef[] {
   return refs;
 }
 
+async function extraCompanyRss(ticker: string, name: string, locale: Locale): Promise<NewsItem[]> {
+  const q = `"${name}" OR ${ticker}`;
+  const { googleNewsUrl, parseRss: parse } = await import("./rss");
+  const [reuters, marketwatch] = await Promise.all([
+    parse(googleNewsUrl(`${q} site:reuters.com`, locale), "Reuters", 6),
+    parse(googleNewsUrl(`${q} site:marketwatch.com`, locale), "MarketWatch", 6),
+  ]);
+  return [...reuters, ...marketwatch].filter((item) => isTickerRelatedHeadline(item.title, ticker, name));
+}
+
 export async function fetchPublicHeadlines(symbol: string, locale: Locale = "en"): Promise<NewsItem[]> {
   const ticker = normalizeSymbol(symbol);
-  const [yahoo, google] = await Promise.all([yahooRssNews(ticker), googleNewsRss(ticker, ticker, locale)]);
+  const [yahoo, google, extra] = await Promise.all([
+    yahooRssNews(ticker),
+    googleNewsRss(ticker, ticker, locale),
+    extraCompanyRss(ticker, ticker, locale),
+  ]);
   const seen = new Set<string>();
-  return [...yahoo, ...google].filter((item) => {
+  return [...yahoo, ...google, ...extra].filter((item) => {
     const key = item.title.toLowerCase();
     if (!item.title || seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 6);
+  }).slice(0, 10);
 }
 
 export async function fetchCompanyContext(symbol: string, locale: Locale = "en"): Promise<CompanyContext> {
@@ -344,10 +327,13 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
     pushHighlight(highlights, "Website", fp.website);
   }
 
-  const google = await googleNewsRss(ticker, companyName, locale);
-  news.push(...google);
+  const [google, extra] = await Promise.all([
+    googleNewsRss(ticker, companyName, locale),
+    extraCompanyRss(ticker, companyName, locale),
+  ]);
+  news.push(...google, ...extra);
 
-  if (news.length < 3) {
+  if (news.length < 4) {
     const extras = await fmpNews(ticker);
     news.push(...extras.filter((item) => isTickerRelatedHeadline(item.title, ticker, companyName)));
   }
@@ -371,7 +357,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
 
   return {
     businessSummary: businessSummary.slice(0, 1800),
-    news: uniqueNews.slice(0, 6),
+    news: uniqueNews.slice(0, 10),
     highlights: uniqueHighlights.slice(0, 8),
     references: references.slice(0, 14),
   };

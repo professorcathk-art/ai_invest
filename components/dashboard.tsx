@@ -41,6 +41,7 @@ import {
   type PersonaId,
 } from "@/lib/llm/persona-ids";
 import { pushRecentTicker } from "@/lib/recent-tickers";
+import { readLocalAnalysis, writeLocalAnalysis } from "@/lib/analysis-session";
 
 interface Payload {
   financials: CompanyFinancials;
@@ -73,6 +74,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
   const [business, setBusiness] = useState<BusinessBreakdown | null>(null);
   const [fromCache, setFromCache] = useState<string | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
+  const [ownershipTick, setOwnershipTick] = useState(0);
 
   const bundle = useMemo(() => {
     if (!payload || !sliders) return null;
@@ -85,8 +87,15 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
 
   async function loadTicker(symbol: string) {
     setLoading(true);
-    setAnalysis(null);
     setSynthesizeCatalysts(false);
+    const local = readLocalAnalysis(symbol, locale);
+    if (local?.analysis?.narratives?.length) {
+      setAnalysis(local.analysis);
+      setFromCache(local.cachedAt);
+    } else {
+      setAnalysis(null);
+      setFromCache(null);
+    }
     try {
       const res = await fetch(`/api/ticker/${encodeURIComponent(symbol)}?lang=${locale}`);
       const json = await res.json();
@@ -101,8 +110,27 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
       setPayload(next);
       setSliders(json.sliders);
       setBusiness(json.business ?? null);
-      setFromCache(null);
       setRecent(pushRecentTicker(next.financials.quote.ticker));
+      const server = json.cachedAnalysis as
+        | { analysis?: IcAnalysis; cachedAt?: string; mode?: string }
+        | null
+        | undefined;
+      if (server?.analysis?.narratives?.length) {
+        const serverAt = server.cachedAt ?? new Date().toISOString();
+        const localOlder = !local || new Date(serverAt).getTime() >= new Date(local.cachedAt).getTime();
+        if (localOlder) {
+          setAnalysis(server.analysis);
+          setFromCache(serverAt);
+          writeLocalAnalysis({
+            ticker: next.financials.quote.ticker,
+            locale,
+            depth: server.mode === "professional" ? "professional" : "concise",
+            personas: selectedPersonas,
+            analysis: server.analysis,
+            cachedAt: serverAt,
+          });
+        }
+      }
       for (const warning of (json.financials.warnings as string[]) ?? []) {
         toast.warning(warning);
       }
@@ -144,6 +172,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
     setAnalysis(null);
     setFromCache(null);
     setAnalyzing(true);
+    setOwnershipTick((n) => n + 1);
     setSynthesizeCatalysts(true);
     const controller = new AbortController();
     const abortTimer = window.setTimeout(() => controller.abort(), 58_000);
@@ -221,7 +250,16 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
           }
           if (event.type === "complete" && event.analysis) {
             setAnalysis(event.analysis);
-            if (event.fromCache) setFromCache(event.cachedAt ?? new Date().toISOString());
+            const cachedAt = event.fromCache ? event.cachedAt ?? new Date().toISOString() : new Date().toISOString();
+            if (event.fromCache) setFromCache(cachedAt);
+            writeLocalAnalysis({
+              ticker: payload.financials.quote.ticker,
+              locale,
+              depth,
+              personas: selectedPersonas,
+              analysis: event.analysis,
+              cachedAt,
+            });
             completed = true;
           }
           if (event.type === "error") {
@@ -454,6 +492,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
                 ticker={bundle.financials.quote.ticker}
                 insight={analysis?.smartMoneyInsight ?? null}
                 insightPending={analyzing && !analysis?.smartMoneyInsight}
+                refreshKey={ownershipTick}
               />
             </TabsContent>
             <TabsContent value="catalysts">

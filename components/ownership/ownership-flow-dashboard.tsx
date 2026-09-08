@@ -126,17 +126,19 @@ export function OwnershipFlowDashboard({
   ticker,
   insight = null,
   insightPending = false,
+  refreshKey = 0,
 }: {
   ticker: string;
   insight?: SmartMoneyInsight | null;
   insightPending?: boolean;
+  refreshKey?: number;
 }) {
   const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/ownership?ticker=${encodeURIComponent(ticker)}`)
+    fetch(`/api/ownership?ticker=${encodeURIComponent(ticker)}&refresh=1`)
       .then((res) => res.json())
       .then((json: Payload) => {
         if (!cancelled) setPayload({ ...json, ticker: json.ticker || ticker });
@@ -147,7 +149,7 @@ export function OwnershipFlowDashboard({
     return () => {
       cancelled = true;
     };
-  }, [ticker]);
+  }, [ticker, refreshKey]);
 
   const snapshots = useMemo(() => sortChronological(payload?.snapshots ?? []), [payload]);
   const latest = snapshots.at(-1) ?? null;
@@ -167,6 +169,7 @@ export function OwnershipFlowDashboard({
       <div className="space-y-4">
         <SmartMoneyBanner insight={insight} pending={insightPending} />
         <p className="text-muted-foreground py-6 text-sm">{t("ownershipEmpty")}</p>
+        <p className="text-muted-foreground text-xs">{t("ownershipLiveHint")}</p>
       </div>
     );
   }
@@ -192,6 +195,7 @@ export function OwnershipFlowDashboard({
       <div className={`rounded-lg border px-4 py-3 text-sm ${badge.tone}`}>
         <div className="font-medium">{badge.label}</div>
         <p className="mt-1 text-pretty opacity-90">{market === "HK" ? hkSummary : t("ownershipUsHint")}</p>
+        <p className="text-muted-foreground mt-1 text-xs">{t("ownershipLiveHint")}</p>
         <p className="text-muted-foreground mt-1 text-xs">
           {t("ownershipAsOf")} {latest.as_of_date}
         </p>

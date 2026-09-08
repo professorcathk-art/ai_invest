@@ -82,11 +82,21 @@ export function parsePrivateDeals(raw: unknown): PrivateDeal[] {
 }
 
 export async function fetchPrivateDeals(): Promise<PrivateDeal[]> {
-  const [rss, stable] = await Promise.all([
+  const { fetchPrivateDealHeadlines } = await import("./private-deals-rss");
+  const [rss, stable, headlines] = await Promise.all([
     fmpJson(`${FMP_V4}/mergers-acquisitions-rss-feed?page=0`),
     fmpJson(`${FMP_STABLE}/mergers-acquisitions?page=0`),
+    fetchPrivateDealHeadlines("en"),
   ]);
-  const deals = [...parsePrivateDeals(rss), ...parsePrivateDeals(stable)];
+  const deals = [...parsePrivateDeals(rss), ...parsePrivateDeals(stable), ...headlines];
   deals.sort((a, b) => String(b.announcedOn).localeCompare(String(a.announcedOn)));
-  return deals.slice(0, 80);
+  const seen = new Set<string>();
+  return deals
+    .filter((deal) => {
+      const key = `${deal.target}|${deal.acquirer}|${deal.announcedOn}|${deal.dealSize}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 80);
 }

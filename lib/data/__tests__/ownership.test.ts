@@ -9,6 +9,7 @@ import {
   pctDelta,
   sortChronological,
 } from "../ownership";
+import { buildYahooOwnershipSnapshot, preferredOwnershipMarket } from "../ownership-live";
 
 describe("ownership ingest", () => {
   it("infers HK vs US from the ticker", () => {
@@ -120,5 +121,50 @@ describe("ownership ingest", () => {
         retail_pct: 10.27,
       }),
     ).toEqual({ error: expect.stringContaining("13F/Form 4") });
+  });
+});
+
+describe("live Yahoo ownership", () => {
+  it("builds a US-style snapshot from Yahoo holder fields", () => {
+    const snap = buildYahooOwnershipSnapshot("NVDA", {
+      defaultKeyStatistics: { heldPercentInstitutions: { raw: 0.66 }, heldPercentInsiders: { raw: 0.04 } },
+      majorHoldersBreakdown: { institutionsPercentHeld: { raw: 0.66 }, insidersPercentHeld: { raw: 0.04 } },
+      institutionOwnership: {
+        ownershipList: [
+          { organization: "Vanguard", pctChange: { raw: 0.012 } },
+          { organization: "BlackRock", pctChange: { raw: -0.008 } },
+        ],
+      },
+    });
+    expect(snap).toMatchObject({
+      ticker: "NVDA",
+      market_type: "US",
+      inst_holding_pct: 66,
+    });
+    expect(snap?.top_buyers[0]?.name).toBe("Vanguard");
+    expect(snap?.top_sellers[0]?.name).toBe("BlackRock");
+  });
+
+  it("prefers named HK CCASS over a Yahoo overlay", () => {
+    const hk = parseOwnershipRecord({
+      ticker: "0700.HK",
+      as_of_date: "2026-09-04",
+      market_type: "HK",
+      institutional_pct: 71,
+      retail_pct: 1.8,
+      top_buyers: [{ name: "CITIBANK N.A.", change_30d: "+1.22%" }],
+      signal_type: "NEUTRAL",
+    });
+    const us = parseOwnershipRecord({
+      ticker: "0700.HK",
+      as_of_date: "2026-09-07",
+      market_type: "US",
+      inst_holding_pct: 40,
+      signal_type: "NEUTRAL",
+    });
+    expect("error" in hk || "error" in us).toBe(false);
+    if ("error" in hk || "error" in us) return;
+    expect(preferredOwnershipMarket([us, hk], "0700.HK")).toBe("HK");
+    expect(preferredOwnershipMarket([us], "0700.HK")).toBe("US");
   });
 });

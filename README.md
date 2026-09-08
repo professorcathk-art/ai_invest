@@ -7,6 +7,7 @@ Multi-persona VC/PE valuation engine. Deterministic TypeScript DCF / LBO / VC mo
 ```bash
 cp .env.example .env.local
 # optional: FMP_API_KEY, DEEPSEEK_API_KEY, Supabase keys
+# cheapest completeness upgrade: FMP starter (~$15–20/mo) for statements + product/geo pies
 npm install
 npm run dev
 ```
@@ -23,7 +24,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | Yes for IC | Platform key from DeepSeek |
 | `DEEPSEEK_MODEL` | Recommended | Use `deepseek-v4-flash` (fast). `deepseek-v4-pro` often exceeds Hobby’s 60s limit |
-| `FMP_API_KEY` | Recommended | Real 5-year statements for most tickers |
+| `FMP_API_KEY` | Recommended | Real 5-year statements, product/geo pies, structured M&A. Starter is enough. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | `https://uggnftvqtqiilxapysnt.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | JWT starting `eyJ…` role `anon` (not only `sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | JWT starting `eyJ…` role `service_role` |
@@ -35,15 +36,27 @@ Investor writing style lives in `lib/llm/lenses.ts` — edit that file to change
 
 ### Public sources (no new paid API)
 
-Headlines come from the **Yahoo Finance ticker RSS** (`feeds.finance.yahoo.com/...&s=TICKER`), not from Yahoo’s generic search feed (that feed is why older builds showed unrelated stories). Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
+Headlines come from **Yahoo Finance ticker RSS**, **Google News** (Reuters / MarketWatch site filters), plus sector tape from Reuters, CNBC, BBC Business, and SCMP. Filings come from Yahoo `secFilings` (SEC EDGAR 10-K / 20-F / 6-K / 13G) plus constructed **HKEX** / **SEC** / **IR** links. Optional `FMP_API_KEY` adds extra ticker news and product/geo pies. Chinese UI is a client dictionary + one `locale` flag on `/api/analyze` — no extra fonts or middleware, so first load stays fast.
+
+**Cheap ways to make tabs look complete (do not invent figures):**
+
+| Gap | Free / cheap source |
+| --- | --- |
+| 5-year statements, HK books, **一圖讀懂** pies | [FMP starter](https://site.financialmodelingprep.com/developer/docs) — best single paid key |
+| Extra US headlines | [Finnhub](https://finnhub.io) free tier, or keep the new RSS mix |
+| US 13F / Form 4 | Already live via Yahoo on IC / 機構動向 (`?refresh=1`). Official bulk: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar) (free) |
+| HK CCASS named brokers | Official [HKEX CCASS](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx) via the weekday iMac job — no cheap third-party substitute |
+| Private-market deals | FMP M&A if keyed; otherwise TechCrunch / Crunchbase / Reuters / Google News RSS |
 
 Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, 72-hour IC memo cache (`cached_analyses`), analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
 
-Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Both pages stay blank when the public feed is empty — no invented sector commentary or fake Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present.
+**IC memos restore without a second DeepSeek call.** After a review finishes, the memo is written to `cached_analyses` (72h) and `localStorage`. Searching another ticker and coming back hydrates the last memo for that name. Clicking **Run IC** again with the same sliders / personas / locale also hits the server cache (⚡ badge). Changing sliders or seats still spends tokens.
 
-HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…` and shows an empty state when nothing has been ingested. Running a committee review also writes a 3-bullet `smartMoneyInsight` from those snapshots. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
+Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Both pages stay blank when the public feed is empty — no invented sector commentary or fake Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present; product cards still fill from the Yahoo description.
 
-The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HKEX pass needs the iMac awake for about 90 minutes. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. The UI tab **籌碼與機構動向 / Smart Money Flow** reads `GET /api/ownership?ticker=…&refresh=1`. **Run IC now also live-fetches Yahoo 13F / holders** and writes a 3-bullet `smartMoneyInsight`. Official HK CCASS names still come from the weekday iMac scrape (unique key is ticker+date, so a same-day Yahoo row will not overwrite named CCASS). **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
+
+The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Optional hourly RSS warmer: `scripts/sync_public_feeds.sh` + `scripts/com.investmouse.public-feeds.plist` (set `INVESTMOUSE_SITE_URL` to the Vercel URL). Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HKEX pass needs the iMac awake for about 90 minutes. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
 
 **Agents (Workbuddy / Codex) may write sourced rows.** `GET /api/ownership/ingest` returns the JSON contract and valid examples. `POST` with `Authorization: Bearer $RESEARCH_INGEST_TOKEN`. A 400 includes `error`, `how_to_fix`, and the same `standard` so the agent can adjust. HK rows need named CCASS participants; US rows need Yahoo 13F / Form 4 fields. Unsourced writes are also blocked by a Postgres trigger.
 

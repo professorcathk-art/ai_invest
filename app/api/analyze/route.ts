@@ -3,7 +3,7 @@ import { writeAnalysis } from "@/lib/data/cache";
 import { readCachedAnalysis, writeCachedAnalysis } from "@/lib/data/analysis-cache";
 import { fetchCompanyContext } from "@/lib/data/context";
 import { buildBusinessBreakdown, segmentBrief } from "@/lib/data/segments";
-import { listOwnership } from "@/lib/data/ownership-store";
+import { refreshThenListOwnership } from "@/lib/data/ownership-live";
 import { ownershipLlmBrief } from "@/lib/data/ownership";
 import { generateDebate, generatePersonaNarrative, personasFor } from "@/lib/llm/generate";
 import { fallbackDebate } from "@/lib/llm/debate";
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
         const [ctx, snapshots] = await Promise.all([
           fetchCompanyContext(ticker, parsed.locale),
-          listOwnership(ticker, 30).catch(() => []),
+          refreshThenListOwnership(ticker, 30).catch(() => []),
         ]);
         ctx.ownershipBrief = ownershipLlmBrief(snapshots);
         const breakdown = await buildBusinessBreakdown(ticker, ctx).catch(() => null);

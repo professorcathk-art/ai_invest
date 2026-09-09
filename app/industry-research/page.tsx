@@ -48,7 +48,8 @@ function IndustryResearchPage() {
   const params = useSearchParams();
   const today = useMemo(() => hktCalendarDate(), []);
   const yesterday = useMemo(() => shiftIsoDate(today, -1), [today]);
-  const sector = isIndustrySectorId(params.get("sector")) ? params.get("sector")! : "ai";
+  const sectorParam = params.get("sector");
+  const sector: IndustrySectorId = isIndustrySectorId(sectorParam) ? sectorParam : "ai";
   const date = isIsoDate(params.get("date")) ? params.get("date")! : yesterday;
   const [data, setData] = useState<SectorResearch | null>(null);
   const [dates, setDates] = useState<string[]>([]);

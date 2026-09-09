@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.investmouse.ownership-sync</string>
+  <string>com.investmouse.industry-digest</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
-    <string>/Users/mickeylau/aiinvest/scripts/run_ownership_sync.sh</string>
+      <string>/bin/zsh</string>
+      <string>/Users/mickeylau/aiinvest/scripts/run_industry_digest.sh</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/mickeylau/aiinvest</string>
@@ -17,47 +17,47 @@
       <key>Weekday</key>
       <integer>1</integer>
       <key>Hour</key>
-      <integer>18</integer>
+      <integer>6</integer>
       <key>Minute</key>
-      <integer>30</integer>
+      <integer>15</integer>
     </dict>
     <dict>
       <key>Weekday</key>
       <integer>2</integer>
       <key>Hour</key>
-      <integer>18</integer>
+      <integer>6</integer>
       <key>Minute</key>
-      <integer>30</integer>
+      <integer>15</integer>
     </dict>
     <dict>
       <key>Weekday</key>
       <integer>3</integer>
       <key>Hour</key>
-      <integer>18</integer>
+      <integer>6</integer>
       <key>Minute</key>
-      <integer>30</integer>
+      <integer>15</integer>
     </dict>
     <dict>
       <key>Weekday</key>
       <integer>4</integer>
       <key>Hour</key>
-      <integer>18</integer>
+      <integer>6</integer>
       <key>Minute</key>
-      <integer>30</integer>
+      <integer>15</integer>
     </dict>
     <dict>
       <key>Weekday</key>
       <integer>5</integer>
       <key>Hour</key>
-      <integer>18</integer>
+      <integer>6</integer>
       <key>Minute</key>
-      <integer>30</integer>
+      <integer>15</integer>
     </dict>
   </array>
   <key>StandardOutPath</key>
-  <string>/Users/mickeylau/Library/Logs/investmouse-ownership-sync.log</string>
+  <string>/Users/mickeylau/Library/Logs/investmouse-industry-digest.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/mickeylau/Library/Logs/investmouse-ownership-sync.log</string>
+  <string>/Users/mickeylau/Library/Logs/investmouse-industry-digest.log</string>
   <key>RunAtLoad</key>
   <false/>
   <key>ProcessType</key>

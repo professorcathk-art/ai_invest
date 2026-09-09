@@ -16,13 +16,7 @@ if [[ -z "${RESEARCH_INGEST_TOKEN:-}" ]]; then
   exit 2
 fi
 
-if [[ -z "${INVESTMOUSE_API_URL:-}" ]]; then
-  echo "Add INVESTMOUSE_API_URL to .env.local, e.g. https://your-app.vercel.app/api/ownership/ingest" >&2
-  exit 2
-fi
-
 PYTHON="${INVESTMOUSE_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.9/bin/python3}"
 export PYTHONPATH="$ROOT/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
-# One process, one HKEX session, one Yahoo crumb. Pass tickers to override the watchlist.
-exec "$PYTHON" "$ROOT/scripts/sync_ccass.py" "$@"
+exec "$PYTHON" "$ROOT/scripts/sync_shortsell.py" "$@"

@@ -1,5 +1,7 @@
 import { runEngines } from "@/lib/engines";
 import { fetchCompanyContext } from "@/lib/data/context";
+import { getLatestShortSelling } from "@/lib/data/hkex-short-selling-store";
+import { isHkTicker } from "@/lib/data/normalize";
 import { listOwnership } from "@/lib/data/ownership-store";
 import { ownershipLlmBrief } from "@/lib/data/ownership";
 import { generateDebate } from "@/lib/llm/generate";
@@ -28,11 +30,12 @@ export async function POST(request: Request) {
 
   const bundle = runEngines(parsed.financials, parsed.sliders);
   const ticker = bundle.financials.quote.ticker;
-  const [ctx, snapshots] = await Promise.all([
+  const [ctx, snapshots, shortSelling] = await Promise.all([
     fetchCompanyContext(ticker, parsed.locale),
     listOwnership(ticker, 30).catch(() => []),
+    isHkTicker(ticker) ? getLatestShortSelling(ticker).catch(() => null) : Promise.resolve(undefined),
   ]);
-  ctx.ownershipBrief = ownershipLlmBrief(snapshots);
+  ctx.ownershipBrief = ownershipLlmBrief(snapshots, shortSelling);
 
   const votes = votingResults(narratives);
   const mode = debateMode(votes);

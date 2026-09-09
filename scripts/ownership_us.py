@@ -30,7 +30,7 @@ def _yahoo_session() -> tuple[requests.Session, str]:
             session.get("https://fc.yahoo.com", timeout=20, allow_redirects=True)
             crumb = session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=20)
             if crumb.status_code == 429:
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(2.5 * (attempt + 1))
                 last_error = requests.HTTPError("Yahoo crumb 429")
                 continue
             crumb.raise_for_status()
@@ -44,22 +44,49 @@ def _yahoo_session() -> tuple[requests.Session, str]:
     raise RuntimeError(f"Yahoo session failed: {last_error}")
 
 
-def build_us_payload(ticker: str) -> dict:
+_SESSION: tuple[requests.Session, str] | None = None
+
+
+def yahoo_session() -> tuple[requests.Session, str]:
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = _yahoo_session()
+    return _SESSION
+
+
+def build_us_payload(ticker: str, session_crumb: tuple[requests.Session, str] | None = None) -> dict:
+    global _SESSION
     symbol = ticker.strip().upper()
-    session, crumb = _yahoo_session()
-    response = session.get(
-        f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}",
-        params={
-            "modules": "defaultKeyStatistics,majorHoldersBreakdown,institutionOwnership,insiderTransactions",
-            "crumb": crumb,
-        },
-        timeout=25,
-    )
-    response.raise_for_status()
-    result = (response.json().get("quoteSummary") or {}).get("result") or []
-    if not result:
-        raise RuntimeError(f"Yahoo returned no ownership modules for {symbol}.")
-    block = result[0]
+    last_error: Exception | None = None
+    for attempt in range(4):
+        try:
+            session, crumb = session_crumb or yahoo_session()
+            response = session.get(
+                f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}",
+                params={
+                    "modules": "defaultKeyStatistics,majorHoldersBreakdown,institutionOwnership,insiderTransactions",
+                    "crumb": crumb,
+                },
+                timeout=25,
+            )
+            if response.status_code == 429:
+                time.sleep(3 * (attempt + 1))
+                last_error = requests.HTTPError("Yahoo quoteSummary 429")
+                _SESSION = None
+                session_crumb = None
+                continue
+            response.raise_for_status()
+            result = (response.json().get("quoteSummary") or {}).get("result") or []
+            if not result:
+                raise RuntimeError(f"Yahoo returned no ownership modules for {symbol}.")
+            return _payload_from_yahoo(symbol, result[0])
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            last_error = exc
+            time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"Yahoo ownership failed for {symbol}: {last_error}")
+
+
+def _payload_from_yahoo(symbol: str, block: dict) -> dict:
     stats = block.get("defaultKeyStatistics") or {}
     major = block.get("majorHoldersBreakdown") or {}
     inst = _raw(major.get("institutionsPercentHeld")) or _raw(stats.get("heldPercentInstitutions"))

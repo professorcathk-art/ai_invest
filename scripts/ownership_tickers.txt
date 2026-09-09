@@ -1,7 +1,7 @@
 # Weekday CCASS / 13F watchlist. One ticker per line.
 # Effective 2026-09-07: Hang Seng Index (95) + Hang Seng TECH (30) + US mega-cap 50.
 # Overlap is listed once. Override with OWNERSHIP_TICKERS in .env.local.
-# HKEX scrape is ~35-45s per name; full list needs the iMac awake for ~90 minutes.
+# HKEX scrape is ~10s per name in one shared session; three parallel shards cover the HK list after the close.
 
 # --- Hang Seng Index (95, review effective 2026-09-07) ---
 0001.HK

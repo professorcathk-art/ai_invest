@@ -18,6 +18,7 @@ import { useI18n } from "@/components/i18n/provider";
 import type { MessageKey } from "@/lib/i18n/messages";
 import type { SmartMoneyInsight } from "@/lib/llm/schemas";
 import { formatCompact } from "@/lib/format";
+import type { HkexShortSellingRow } from "@/lib/data/hkex-short-selling";
 import {
   latestNamedFlow,
   pctDelta,
@@ -32,11 +33,26 @@ interface Payload {
   ticker: string;
   market: "HK" | "US";
   snapshots: OwnershipSnapshot[];
+  shortSelling: HkexShortSellingRow | null;
+  shortSellingHistory: HkexShortSellingRow[];
 }
+
+type OwnershipSeed = {
+  ticker: string;
+  market: "HK" | "US";
+  snapshots: OwnershipSnapshot[];
+  shortSelling?: HkexShortSellingRow | null;
+  shortSellingHistory?: HkexShortSellingRow[];
+};
 
 function fmtPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${value.toFixed(1)}%`;
+}
+
+function fmtShares(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toLocaleString("en-US");
 }
 
 function signedPct(value: number | null): string {
@@ -134,7 +150,7 @@ export function OwnershipFlowDashboard({
   insight?: SmartMoneyInsight | null;
   insightPending?: boolean;
   refreshKey?: number;
-  seeded?: { ticker: string; market: "HK" | "US"; snapshots: OwnershipSnapshot[] } | null;
+  seeded?: OwnershipSeed | null;
 }) {
   const { t, locale } = useI18n();
   const [payload, setPayload] = useState<Payload | null>(null);
@@ -146,15 +162,24 @@ export function OwnershipFlowDashboard({
       .then((json: Payload) => {
         if (cancelled) return;
         const snapshots = Array.isArray(json.snapshots) ? json.snapshots : [];
+        const history = Array.isArray(json.shortSellingHistory) ? json.shortSellingHistory : [];
         setPayload({
           ticker: json.ticker || ticker,
           market: json.market ?? preferredOwnershipMarket(snapshots, ticker),
           snapshots,
+          shortSelling: json.shortSelling ?? null,
+          shortSellingHistory: history,
         });
       })
       .catch(() => {
         if (!cancelled) {
-          setPayload({ ticker, market: ticker.endsWith(".HK") ? "HK" : "US", snapshots: [] });
+          setPayload({
+            ticker,
+            market: ticker.endsWith(".HK") ? "HK" : "US",
+            snapshots: [],
+            shortSelling: null,
+            shortSellingHistory: [],
+          });
         }
       });
     return () => {
@@ -164,14 +189,17 @@ export function OwnershipFlowDashboard({
 
   const display = useMemo(() => {
     const fromFetch = payload?.ticker === ticker ? payload : null;
-    const fromSeed = seeded?.ticker === ticker && seeded.snapshots.length ? seeded : null;
-    if (fromFetch && fromFetch.snapshots.length) return fromFetch;
-    return fromSeed ?? fromFetch;
+    const seedHasData = Boolean(seeded?.snapshots.length || seeded?.shortSelling);
+    const fromSeed = seeded?.ticker === ticker && seedHasData ? seeded : null;
+    if (fromFetch && (fromFetch.snapshots.length || fromFetch.shortSelling)) return fromFetch;
+    return fromFetch ?? fromSeed;
   }, [payload, seeded, ticker]);
 
   const snapshots = useMemo(() => sortChronological(display?.snapshots ?? []), [display]);
   const latest = snapshots.at(-1) ?? null;
   const market = display?.market ?? (ticker.endsWith(".HK") ? "HK" : "US");
+  const shortSelling = display?.shortSelling ?? null;
+  const shortHistory = display?.shortSellingHistory ?? [];
   const loading = !display || display.ticker !== ticker;
 
   if (loading) {
@@ -186,6 +214,7 @@ export function OwnershipFlowDashboard({
     return (
       <div className="space-y-4">
         <SmartMoneyBanner insight={insight} pending={insightPending} />
+        {market === "HK" ? <HkShortSellingCard latest={shortSelling} history={shortHistory} /> : null}
         <p className="text-muted-foreground py-6 text-sm">{t("ownershipEmpty")}</p>
         <p className="text-muted-foreground text-xs">{t("ownershipLiveHint")}</p>
       </div>
@@ -221,6 +250,7 @@ export function OwnershipFlowDashboard({
 
       {market === "HK" ? (
         <>
+          <HkShortSellingCard latest={shortSelling} history={shortHistory} />
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle className="text-sm">{t("ownershipHkChart")}</CardTitle>
@@ -296,5 +326,69 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="text-muted-foreground text-[10px] tracking-[0.14em] uppercase">{label}</div>
       <div className="font-financial text-lg">{value}</div>
     </div>
+  );
+}
+
+function HkShortSellingCard({
+  latest,
+  history,
+}: {
+  latest: HkexShortSellingRow | null;
+  history: HkexShortSellingRow[];
+}) {
+  const { t } = useI18n();
+  const sessionLabel =
+    latest?.session === "MORNING_CLOSE" ? t("ownershipHkShortMorning") : t("ownershipHkShortDay");
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader>
+        <CardTitle className="text-sm">{t("ownershipHkShortTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {latest ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-3">
+              <Metric label={t("ownershipHkShortShares")} value={fmtShares(latest.short_shares)} />
+              <Metric
+                label={t("ownershipHkShortTurnover")}
+                value={formatCompact(latest.short_turnover_hkd, 1, "HKD", true)}
+              />
+              <Metric label={t("ownershipHkShortSession")} value={sessionLabel} />
+            </div>
+            {history.length >= 2 ? (
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={history}>
+                    <CartesianGrid stroke="#1f2937" vertical={false} />
+                    <XAxis dataKey="as_of_date" stroke="#9ca3af" fontSize={11} />
+                    <YAxis
+                      stroke="#9ca3af"
+                      fontSize={11}
+                      tickFormatter={(v) => formatCompact(Number(v), 1, "HKD", true)}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "#111827", border: "1px solid #1f2937" }}
+                      formatter={(v) => [formatCompact(Number(v ?? 0), 1, "HKD", true), t("ownershipHkShortTurnover")]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="short_turnover_hkd"
+                      name={t("ownershipHkShortChart")}
+                      stroke="#F59E0B"
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : null}
+            <p className="text-muted-foreground text-xs text-pretty">
+              {t("ownershipAsOf")} {latest.as_of_date} · {t("ownershipHkShortHint")}
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground text-sm text-pretty">{t("ownershipHkShortEmpty")}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

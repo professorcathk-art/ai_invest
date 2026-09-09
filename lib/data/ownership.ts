@@ -1,3 +1,4 @@
+import { shortSellingLlmBrief, type HkexShortSellingRow } from "./hkex-short-selling";
 import { isHkTicker, normalizeSymbol } from "./normalize";
 
 export const OWNERSHIP_SIGNALS = [
@@ -272,37 +273,47 @@ export function mergeLiveOwnership(
 }
 
 /** Compact facts for the IC / Smart Money LLM. Never invent figures beyond this JSON. */
-export function ownershipLlmBrief(snapshots: OwnershipSnapshot[]): string {
+export function ownershipLlmBrief(
+  snapshots: OwnershipSnapshot[],
+  shortSelling?: HkexShortSellingRow | null,
+): string {
+  const parts: string[] = [];
   if (snapshots.length === 0) {
-    return "No ingested CCASS or 13F snapshots for this ticker.";
+    parts.push("No ingested CCASS or 13F snapshots for this ticker.");
+  } else {
+    const ordered = sortChronological(snapshots);
+    const latest = ordered.at(-1)!;
+    const earliest = ordered[0]!;
+    parts.push(
+      JSON.stringify(
+        {
+          observations: ordered.length,
+          from: earliest.as_of_date,
+          to: latest.as_of_date,
+          market: latest.market_type,
+          signal: latest.signal_type,
+          latest: {
+            institutional_pct: latest.institutional_pct,
+            retail_pct: latest.retail_pct,
+            inst_holding_pct: latest.inst_holding_pct,
+            insider_holding_pct: latest.insider_holding_pct,
+            short_interest_pct: latest.short_interest_pct,
+            net_insider_usd: latest.net_insider_usd,
+          },
+          shift: {
+            institutional_pct: pctDelta(earliest.institutional_pct, latest.institutional_pct),
+            retail_pct: pctDelta(earliest.retail_pct, latest.retail_pct),
+            inst_holding_pct: pctDelta(earliest.inst_holding_pct, latest.inst_holding_pct),
+          },
+          top_buyers: latestNamedFlow(ordered).buyers.slice(0, 5),
+          top_sellers: latestNamedFlow(ordered).sellers.slice(0, 5),
+        },
+        null,
+        2,
+      ),
+    );
   }
-  const ordered = sortChronological(snapshots);
-  const latest = ordered.at(-1)!;
-  const earliest = ordered[0]!;
-  return JSON.stringify(
-    {
-      observations: ordered.length,
-      from: earliest.as_of_date,
-      to: latest.as_of_date,
-      market: latest.market_type,
-      signal: latest.signal_type,
-      latest: {
-        institutional_pct: latest.institutional_pct,
-        retail_pct: latest.retail_pct,
-        inst_holding_pct: latest.inst_holding_pct,
-        insider_holding_pct: latest.insider_holding_pct,
-        short_interest_pct: latest.short_interest_pct,
-        net_insider_usd: latest.net_insider_usd,
-      },
-      shift: {
-        institutional_pct: pctDelta(earliest.institutional_pct, latest.institutional_pct),
-        retail_pct: pctDelta(earliest.retail_pct, latest.retail_pct),
-        inst_holding_pct: pctDelta(earliest.inst_holding_pct, latest.inst_holding_pct),
-      },
-      top_buyers: latestNamedFlow(ordered).buyers.slice(0, 5),
-      top_sellers: latestNamedFlow(ordered).sellers.slice(0, 5),
-    },
-    null,
-    2,
-  );
+  const shortBrief = shortSellingLlmBrief(shortSelling);
+  if (shortBrief) parts.push(shortBrief);
+  return parts.join("\n");
 }

@@ -1,6 +1,6 @@
 import unittest
 
-from ccass_hkex import classify, hk_stock_code, parse_rows, signal_for
+from ccass_hkex import classify, hidden_inputs, hk_stock_code, parse_rows, signal_for
 
 
 SAMPLE = """
@@ -42,6 +42,27 @@ class CcassTests(unittest.TestCase):
         self.assertEqual(rows[1].bucket, "retail")
         self.assertEqual(signal_for(45.2, 12.1, 43.0, 13.4), "INSTITUTIONAL_ACCUMULATION")
         self.assertEqual(signal_for(40.0, 15.0, 42.0, 12.0), "RETAIL_TRAP")
+
+    def test_shards_split_the_watchlist(self):
+        from sync_ccass import apply_market, apply_shard
+
+        hk = apply_market(["0700.HK", "NVDA", "0005.HK", "AAPL", "9988.HK"], "hk")
+        self.assertEqual(hk, ["0700.HK", "0005.HK", "9988.HK"])
+        self.assertEqual(apply_shard(hk, "1/3"), ["0700.HK"])
+        self.assertEqual(apply_shard(hk, "2/3"), ["0005.HK"])
+        self.assertEqual(apply_shard(hk, "3/3"), ["9988.HK"])
+
+    def test_hidden_aspnet_fields(self):
+        html = """
+        <form>
+          <input type="hidden" name="__VIEWSTATE" value="abc" />
+          <input type="hidden" name="txtShareholdingDate" value="2026/09/07" />
+          <input type="submit" name="btnSearch" value="Search" />
+        </form>
+        """
+        fields = hidden_inputs(html)
+        self.assertEqual(fields["__VIEWSTATE"], "abc")
+        self.assertEqual(fields["txtShareholdingDate"], "2026/09/07")
 
 
 if __name__ == "__main__":

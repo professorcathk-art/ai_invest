@@ -17,7 +17,13 @@ if [[ -f "$ROOT/.env.local" ]]; then
   set +a
 fi
 
-SITE="${INVESTMOUSE_SITE_URL:-http://127.0.0.1:3000}"
+if [[ -n "${INVESTMOUSE_SITE_URL:-}" ]]; then
+  SITE="$INVESTMOUSE_SITE_URL"
+elif [[ -n "${INVESTMOUSE_API_URL:-}" ]]; then
+  SITE="${INVESTMOUSE_API_URL%/api/*}"
+else
+  SITE="http://127.0.0.1:3030"
+fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Warming public feeds via $SITE"
 

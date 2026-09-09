@@ -29,7 +29,7 @@ Set these in Vercel → Project → Settings → Environment Variables:
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | `https://uggnftvqtqiilxapysnt.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | JWT starting `eyJ…` role `anon` (not only `sb_publishable_…`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | JWT starting `eyJ…` role `service_role` |
-| `RESEARCH_INGEST_TOKEN` | Optional | Bearer token for `POST /api/ownership/ingest` (iMac CCASS script / agents) |
+| `RESEARCH_INGEST_TOKEN` | Optional | Bearer token for ownership, HKEX short-selling, and sector-digest ingest jobs |
 
 Hobby functions hard-timeout at **60 seconds**. IC uses four parallel DeepSeek calls plus a chair, then returns.
 
@@ -47,17 +47,32 @@ Headlines come from **Yahoo Finance ticker RSS**, **Google News** (Reuters / Mar
 | Extra US headlines | [Finnhub](https://finnhub.io) free tier, or keep the new RSS mix |
 | US 13F / Form 4 | Already live via Yahoo on IC / 機構動向 (`?refresh=1`). Official bulk: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar) (free) |
 | HK CCASS named brokers | Official [HKEX CCASS](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx) via the weekday iMac job — no cheap third-party substitute |
+| HK short-selling turnover | Official [HKEX Short Selling Turnover Today](https://www.hkex.com.hk/eng/stat/smstat/ssturnover/sstoday.htm) (`ASHTMAIN` / `ASHTGEM` after the close) |
 | Private-market deals | FMP M&A if keyed; otherwise TechCrunch / Crunchbase / Reuters / Google News RSS |
 
 Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, 72-hour IC memo cache (`cached_analyses`), analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
 
 **IC memos restore without a second DeepSeek call.** After a review finishes, the memo is written to `cached_analyses` (72h) and `localStorage`. Searching another ticker and coming back hydrates the last memo for that name. Clicking **Run IC** again with the same sliders / personas / locale also hits the server cache (⚡ badge). Changing sliders or seats still spends tokens.
 
-Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Both pages stay blank when the public feed is empty — no invented sector commentary or fake Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present; product cards still fill from the Yahoo description.
+Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Sector research is a **dated digest**: headlines are kept only if they belong to the sector or name a watchlist stock, then a 06:15 HKT desk note (DeepSeek) lists helped / pressured names. That is not an IC vote, and generic wires are not stamped with NVDA or COST. Pick a calendar date to reopen a stored day. Private-market stays blank when the public feed is empty — no invented Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present; product cards still fill from the Yahoo description.
 
-HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. **Run IC always live-fetches Yahoo 13F / Form 4 / holders from the web.** If the database has no row (or no named HK CCASS), that live tape is shown on **籌碼與機構動向** immediately. Named HKEX CCASS brokers still win when the weekday iMac job has them; a same-day Yahoo row will not overwrite official CCASS. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
+HK CCASS and US 13F/Form 4 snapshots live in `ownership_snapshots`. **HKEX short-selling turnover** lives in `hkex_short_selling` (official `ASHTMAIN` / `ASHTGEM` after the close). That is daily short *turnover* in shares and HKD — not Yahoo’s US short interest % of float, and we do not label it as such. **Run IC always live-fetches Yahoo 13F / Form 4 / holders from the web.** If the database has no row (or no named HK CCASS), that live tape is shown on **籌碼與機構動向** immediately. Named HKEX CCASS brokers still win when the weekday iMac job has them; a same-day Yahoo row will not overwrite official CCASS. **股息與催化劑 / Dividends & Catalysts** uses `GET /api/catalysts` (Yahoo + headline search, DeepSeek synthesis). Missing live figures stay blank — no mock yields or invented event dates.
 
-The weekday writer is the iMac job `scripts/run_ownership_sync.sh` + `scripts/com.investmouse.ownership-sync.plist` (18:30 Mon–Fri). Optional hourly RSS warmer: `scripts/sync_public_feeds.sh` + `scripts/com.investmouse.public-feeds.plist` (set `INVESTMOUSE_SITE_URL` to the Vercel URL). Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HKEX pass needs the iMac awake for about 90 minutes. Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
+The iMac is on 24 hours, but **HKEX CCASS only publishes one file per trading day** (usually after the close, shown as T+1). Scraping hourly does not create new broker data. The Mac is used as several small jobs instead:
+
+| Job | When (local) | What it writes |
+| --- | --- | --- |
+| `ccass-hk-1/2/3` | 19:00 / 19:05 / 19:10 Mon–Fri | 1/3 of the HK list each, in parallel, into `ownership_snapshots` |
+| `hkex-shortsell` | 12:20, 16:25, 17:05 Mon–Fri | Official HKEX short-selling turnover into `hkex_short_selling` |
+| `ccass-retry` | every 3 hours | Only names that failed earlier |
+| `us-ownership` | 10:30, 16:30, 21:30 Mon–Fri | Yahoo 13F / Form 4 |
+| `industry-digest` | 06:15 Mon–Fri | Writes yesterday’s sector digest (HKT) into `industry_digests` |
+| `public-feeds` | hourly | Warms sector + private-market RSS |
+| `warm-books` | 07:15 Mon–Fri | Caches a short ticker list into `financial_snapshots` |
+
+Install once: `zsh scripts/install_imac_jobs.sh`. Logs live in `~/Library/Logs/investmouse-*.log`. Failed names are queued in `~/Library/Logs/investmouse-failed-tickers.txt`.
+
+The weekday writer used to be a single 18:30 job; that label is disabled after install so it does not double-scrape. Default names are in `scripts/ownership_tickers.txt`: **Hang Seng Index (95) + Hang Seng TECH extras + 50 US mega-caps** (~155 names after de-dupe). A full HK pass is typically **~10 seconds per name** on HKEX’s page. Set `CCASS_LOOKBACK=1` if you also want a 21-day flow compare (extra POST per name). Override with `OWNERSHIP_TICKERS` in `.env.local`. HK names are scraped from the official [HKEX CCASS Shareholding Search](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx); US names use Yahoo 13F / insider / short-interest modules.
 
 **Agents (Workbuddy / Codex) may write sourced rows.** `GET /api/ownership/ingest` returns the JSON contract and valid examples. `POST` with `Authorization: Bearer $RESEARCH_INGEST_TOKEN`. A 400 includes `error`, `how_to_fix`, and the same `standard` so the agent can adjust. HK rows need named CCASS participants; US rows need Yahoo 13F / Form 4 fields. Unsourced writes are also blocked by a Postgres trigger.
 

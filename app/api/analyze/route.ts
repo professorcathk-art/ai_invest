@@ -3,6 +3,8 @@ import { writeAnalysis } from "@/lib/data/cache";
 import { readCachedAnalysis, writeCachedAnalysis } from "@/lib/data/analysis-cache";
 import { fetchCompanyContext } from "@/lib/data/context";
 import { buildBusinessBreakdown, segmentBrief } from "@/lib/data/segments";
+import { getLatestShortSelling } from "@/lib/data/hkex-short-selling-store";
+import { isHkTicker } from "@/lib/data/normalize";
 import { refreshThenListOwnership } from "@/lib/data/ownership-live";
 import { ownershipLlmBrief, preferredOwnershipMarket } from "@/lib/data/ownership";
 import { generateDebate, generatePersonaNarrative, personasFor } from "@/lib/llm/generate";
@@ -93,11 +95,12 @@ export async function POST(request: Request) {
           locale: parsed.locale,
         });
 
-        const [ctx, snapshots] = await Promise.all([
+        const [ctx, snapshots, shortSelling] = await Promise.all([
           fetchCompanyContext(ticker, parsed.locale),
           refreshThenListOwnership(ticker, 30).catch(() => []),
+          isHkTicker(ticker) ? getLatestShortSelling(ticker).catch(() => null) : Promise.resolve(undefined),
         ]);
-        ctx.ownershipBrief = ownershipLlmBrief(snapshots);
+        ctx.ownershipBrief = ownershipLlmBrief(snapshots, shortSelling);
         const breakdown = await buildBusinessBreakdown(ticker, ctx).catch(() => null);
         if (breakdown) ctx.segmentBrief = segmentBrief(breakdown, parsed.locale);
         send({
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
           context: ctx,
           business: breakdown,
           snapshots,
+          shortSelling: shortSelling ?? null,
           ownershipMarket: preferredOwnershipMarket(snapshots, ticker),
         });
 
@@ -126,7 +130,7 @@ export async function POST(request: Request) {
         }
 
         const insightTask = withBudget(
-          generateSmartMoneyInsight(snapshots, parsed.locale),
+          generateSmartMoneyInsight(snapshots, parsed.locale, shortSelling),
           10_000,
           "Smart money insight",
         )

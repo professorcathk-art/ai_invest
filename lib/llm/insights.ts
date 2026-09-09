@@ -2,6 +2,7 @@ import { deepseek } from "@ai-sdk/deepseek";
 import { generateText } from "ai";
 import { languageRule } from "./prompts";
 import { smartMoneyInsightSchema, type SmartMoneyInsight } from "./schemas";
+import type { HkexShortSellingRow } from "@/lib/data/hkex-short-selling";
 import {
   ownershipLlmBrief,
   pctDelta,
@@ -122,6 +123,7 @@ export function fallbackSmartMoneyInsight(snapshots: OwnershipSnapshot[], locale
 export async function generateSmartMoneyInsight(
   snapshots: OwnershipSnapshot[],
   locale: Locale,
+  shortSelling?: HkexShortSellingRow | null,
 ): Promise<SmartMoneyInsight> {
   if (!process.env.DEEPSEEK_API_KEY) return fallbackSmartMoneyInsight(snapshots, locale);
   const text = await complete(
@@ -130,9 +132,10 @@ HARD RULES:
 - Use ONLY the supplied ownership JSON. Never invent percentages, broker names, or dates.
 - Write exactly 3 bullets: (1) 30-day institutional vs retail / 13F shift, (2) notable broker or insider movements, (3) strategic implication.
 - If snapshots are missing, say the data is insufficient. Do not invent a bullish or bearish call.
+- If hkex_short_selling is present, you may mention those official daily short-turnover figures. Never call them short interest as a percent of float.
 - ${languageRule(locale)}
 Return ONLY JSON: { "bullets": ["...", "...", "..."] }`,
-    ownershipLlmBrief(snapshots),
+    ownershipLlmBrief(snapshots, shortSelling),
     500,
   );
   return smartMoneyInsightSchema.parse(extractJson(text));

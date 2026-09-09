@@ -40,6 +40,7 @@ import {
   PERSONA_IDS,
   type PersonaId,
 } from "@/lib/llm/persona-ids";
+import type { HkexShortSellingRow } from "@/lib/data/hkex-short-selling";
 import { preferredOwnershipMarket, type OwnershipSnapshot } from "@/lib/data/ownership";
 import { pushRecentTicker } from "@/lib/recent-tickers";
 import { readLocalAnalysis, writeLocalAnalysis } from "@/lib/analysis-session";
@@ -80,6 +81,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
     ticker: string;
     market: "HK" | "US";
     snapshots: OwnershipSnapshot[];
+    shortSelling?: HkexShortSellingRow | null;
   } | null>(null);
 
   const bundle = useMemo(() => {
@@ -225,6 +227,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
             fromCache?: boolean;
             business?: BusinessBreakdown;
             snapshots?: OwnershipSnapshot[];
+            shortSelling?: HkexShortSellingRow | null;
             ownershipMarket?: "HK" | "US";
             error?: string;
           };
@@ -236,6 +239,7 @@ export function Dashboard({ initialTicker }: { initialTicker?: string }) {
               setOwnershipSeed({
                 ticker: symbol,
                 snapshots: event.snapshots,
+                shortSelling: event.shortSelling ?? null,
                 market: event.ownershipMarket ?? preferredOwnershipMarket(event.snapshots, symbol),
               });
             }

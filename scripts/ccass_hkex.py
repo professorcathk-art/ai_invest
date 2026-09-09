@@ -1,19 +1,35 @@
-"""Official HKEX CCASS Shareholding Search — https://www3.hkexnews.hk/sdw/search/searchsdw.aspx"""
+"""Official HKEX CCASS Shareholding Search — one shared session, one POST per name.
+
+https://www3.hkexnews.hk/sdw/search/searchsdw.aspx
+
+HKEX is an ASP.NET postback (not a public JSON API). The slow/hangy behaviour came from:
+starting a new Python process + GET of the search form for every ticker, then up to five
+extra date lookups. This client opens the form once, reuses ViewState, and scrapes
+today's table with BeautifulSoup.
+"""
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
 import requests
+from bs4 import BeautifulSoup
 
 SEARCH_URL = "https://www3.hkexnews.hk/sdw/search/searchsdw.aspx"
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
+CONNECT_TIMEOUT = float(os.getenv("CCASS_CONNECT_TIMEOUT", "8"))
+READ_TIMEOUT = float(os.getenv("CCASS_READ_TIMEOUT", "22"))
+TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+RETRIES = int(os.getenv("CCASS_RETRIES", "2"))
+GAP_SEC = float(os.getenv("CCASS_GAP_SEC", "0.35"))
 
 INST_NEEDLES = (
     "HONGKONG AND SHANGHAI BANKING",
@@ -121,7 +137,28 @@ def classify(name: str) -> str:
     return "other"
 
 
+def _texts(soup: BeautifulSoup, selector: str) -> list[str]:
+    return [el.get_text(" ", strip=True) for el in soup.select(selector)]
+
+
 def parse_rows(html: str) -> list[CcassRow]:
+    soup = BeautifulSoup(html, "html.parser")
+    pids = _texts(soup, ".col-participant-id .mobile-list-body")
+    names = _texts(soup, ".col-participant-name .mobile-list-body")
+    shares_raw = _texts(soup, ".col-shareholding.text-right .mobile-list-body")
+    pcts_raw = _texts(soup, ".col-shareholding-percent .mobile-list-body")
+    n = min(len(pids), len(names), len(shares_raw), len(pcts_raw))
+    if n == 0:
+        return _parse_rows_regex(html)
+    rows: list[CcassRow] = []
+    for i in range(n):
+        shares = float(shares_raw[i].replace(",", "") or 0)
+        pct = float(pcts_raw[i].replace("%", "").replace(",", "") or 0)
+        rows.append(CcassRow(pids[i], names[i], shares, pct, classify(names[i])))
+    return rows
+
+
+def _parse_rows_regex(html: str) -> list[CcassRow]:
     rows: list[CcassRow] = []
     for match in ROW_RE.finditer(html):
         pid, name, shares_raw, pct_raw = (part.strip() for part in match.groups())
@@ -131,73 +168,114 @@ def parse_rows(html: str) -> list[CcassRow]:
     return rows
 
 
-def parse_shareholding_date(html: str) -> date | None:
-    match = re.search(
-        r'name="txtShareholdingDate"[^>]*value="(\d{4}/\d{2}/\d{2})"',
-        html,
-    ) or re.search(
-        r'id="txtShareholdingDate"[^>]*value="(\d{4}/\d{2}/\d{2})"',
-        html,
-    )
-    if not match:
-        return None
-    return datetime.strptime(match.group(1), "%Y/%m/%d").date()
-
-
-def _inputs(html: str) -> dict[str, str]:
+def hidden_inputs(html: str) -> dict[str, str]:
+    soup = BeautifulSoup(html, "html.parser")
     fields: dict[str, str] = {}
-    for tag in re.finditer(r"<input\b([^>]*)>", html, re.I):
-        attrs = tag.group(1)
-        name = re.search(r'\bname="([^"]+)"', attrs)
+    for tag in soup.find_all("input"):
+        name = tag.get("name")
         if not name:
             continue
-        value = re.search(r'\bvalue="([^"]*)"', attrs)
-        fields[name.group(1)] = value.group(1) if value else ""
+        fields[str(name)] = str(tag.get("value") or "")
     return fields
 
 
-def _session() -> requests.Session:
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": UA,
-            "Accept": "text/html,application/xhtml+xml",
-            "Accept-Language": "en-US,en;q=0.9",
+def parse_shareholding_date(html: str) -> date | None:
+    fields = hidden_inputs(html)
+    raw = fields.get("txtShareholdingDate") or ""
+    if not raw:
+        match = re.search(r'name="txtShareholdingDate"[^>]*value="(\d{4}/\d{2}/\d{2})"', html)
+        raw = match.group(1) if match else ""
+    if not re.match(r"\d{4}/\d{2}/\d{2}", raw):
+        return None
+    return datetime.strptime(raw[:10], "%Y/%m/%d").date()
+
+
+class HkexCcassClient:
+    """One TCP session + one ASP.NET ViewState for the whole watchlist."""
+
+    def __init__(self) -> None:
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "User-Agent": UA,
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+        )
+        self.fields: dict[str, str] = {}
+        self.market_date: date | None = None
+
+    def open(self) -> date | None:
+        html = self._call("GET")
+        self._refresh(html)
+        return self.market_date
+
+    def search(self, stock_code: str, as_of: date | None = None) -> tuple[date, list[CcassRow]]:
+        if not self.fields:
+            self.open()
+        use_date = as_of or self.market_date or date.today()
+        payload = {
+            **self.fields,
+            "__EVENTTARGET": "btnSearch",
+            "__EVENTARGUMENT": "",
+            "txtShareholdingDate": use_date.strftime("%Y/%m/%d"),
+            "txtStockCode": stock_code,
+            "txtStockName": "",
+            "txtParticipantID": "",
+            "txtParticipantName": "",
+            "txtSelPartID": "",
+            "sortBy": self.fields.get("sortBy") or "shareholding",
+            "sortDirection": self.fields.get("sortDirection") or "desc",
         }
-    )
-    return session
+        html = self._call("POST", payload)
+        self._refresh(html)
+        rows = parse_rows(html)
+        actual = parse_shareholding_date(html) or use_date
+        if as_of is None:
+            self.market_date = actual
+        return actual, rows
+
+    def _refresh(self, html: str) -> None:
+        self.fields = hidden_inputs(html)
+        parsed = parse_shareholding_date(html)
+        if parsed and self.market_date is None:
+            self.market_date = parsed
+
+    def _call(self, method: str, data: dict[str, str] | None = None) -> str:
+        last: Exception | None = None
+        for attempt in range(RETRIES + 1):
+            try:
+                if method == "GET":
+                    res = self.session.get(SEARCH_URL, timeout=TIMEOUT)
+                else:
+                    res = self.session.post(
+                        SEARCH_URL,
+                        data=data,
+                        timeout=TIMEOUT,
+                        headers={"Referer": SEARCH_URL, "Origin": "https://www3.hkexnews.hk"},
+                    )
+                res.raise_for_status()
+                if len(res.text) < 200:
+                    raise RuntimeError("HKEX returned an empty page")
+                return res.text
+            except (requests.RequestException, RuntimeError) as exc:
+                last = exc
+                time.sleep(1.2 * (attempt + 1))
+        raise last or RuntimeError("HKEX request failed")
 
 
-def fetch_ccass(stock_code: str, as_of: date | None = None, session: requests.Session | None = None) -> tuple[date, list[CcassRow]]:
-    own = session or _session()
-    page = own.get(SEARCH_URL, timeout=45)
-    page.raise_for_status()
-    fields = _inputs(page.text)
-    default_date = parse_shareholding_date(page.text)
-    use_date = as_of or default_date or date.today()
-    payload = {
-        **fields,
-        "__EVENTTARGET": "btnSearch",
-        "__EVENTARGUMENT": "",
-        "txtShareholdingDate": use_date.strftime("%Y/%m/%d"),
-        "txtStockCode": stock_code,
-        "txtStockName": "",
-        "txtParticipantID": "",
-        "txtParticipantName": "",
-        "txtSelPartID": "",
-        "sortBy": fields.get("sortBy") or "shareholding",
-        "sortDirection": fields.get("sortDirection") or "desc",
-    }
-    result = own.post(
-        SEARCH_URL,
-        data=payload,
-        timeout=45,
-        headers={"Referer": SEARCH_URL, "Origin": "https://www3.hkexnews.hk"},
-    )
-    result.raise_for_status()
-    rows = parse_rows(result.text)
-    actual = parse_shareholding_date(result.text) or use_date
-    return actual, rows
+def fetch_ccass(
+    stock_code: str,
+    as_of: date | None = None,
+    session: requests.Session | None = None,
+    client: HkexCcassClient | None = None,
+) -> tuple[date, list[CcassRow]]:
+    own = client or HkexCcassClient()
+    if session is not None:
+        own.session = session
+    if not own.fields:
+        own.open()
+    return own.search(stock_code, as_of)
 
 
 def _business_days_back(start: date, days: int) -> date:
@@ -210,24 +288,25 @@ def _business_days_back(start: date, days: int) -> date:
     return cursor
 
 
-def fetch_with_lookback(stock_code: str, lookback_days: int = 21) -> tuple[date, list[CcassRow], date | None, list[CcassRow]]:
-    session = _session()
-    as_of, latest = fetch_ccass(stock_code, session=session)
+def fetch_with_lookback(
+    stock_code: str,
+    lookback_days: int = 21,
+    client: HkexCcassClient | None = None,
+) -> tuple[date, list[CcassRow], date | None, list[CcassRow]]:
+    own = client or HkexCcassClient()
+    if not own.fields:
+        own.open()
+    as_of, latest = own.search(stock_code)
     if not latest:
         return as_of, [], None, []
+    want_lookback = os.getenv("CCASS_LOOKBACK", "").strip().lower() in {"1", "true", "yes"}
+    if not want_lookback:
+        return as_of, latest, None, []
     prior_date = _business_days_back(as_of, lookback_days)
-    prior_rows: list[CcassRow] = []
-    found: date | None = None
-    for offset in range(0, 4):
-        trial = prior_date - timedelta(days=offset)
-        if trial.weekday() >= 5:
-            continue
-        try:
-            found, prior_rows = fetch_ccass(stock_code, trial, session=session)
-        except requests.RequestException:
-            continue
-        if prior_rows:
-            break
+    try:
+        found, prior_rows = own.search(stock_code, prior_date)
+    except (requests.RequestException, RuntimeError):
+        return as_of, latest, None, []
     return as_of, latest, found if prior_rows else None, prior_rows
 
 
@@ -261,9 +340,9 @@ def signal_for(inst_now: float, retail_now: float, inst_then: float | None, reta
     return "NEUTRAL"
 
 
-def build_hk_payload(ticker: str) -> dict:
+def build_hk_payload(ticker: str, client: HkexCcassClient | None = None) -> dict:
     code = hk_stock_code(ticker)
-    as_of, latest, prior_date, prior = fetch_with_lookback(code)
+    as_of, latest, _prior_date, prior = fetch_with_lookback(code, client=client)
     inst = bucket_pct(latest, "institutional")
     retail = bucket_pct(latest, "retail")
     inst_then = bucket_pct(prior, "institutional") if prior else None

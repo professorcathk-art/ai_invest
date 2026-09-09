@@ -1,12 +1,14 @@
 export const INDUSTRY_SECTORS = [
   {
     id: "ai",
-    tickers: ["NVDA", "AVGO", "AMD", "TSM", "0981.HK"],
+    tickers: ["NVDA", "AVGO", "AMD", "TSM", "AAPL", "MSFT", "0981.HK"],
     aliases: {
       NVDA: ["nvidia", "nvda", "英偉達", "輝達"],
       AVGO: ["broadcom", "avgo"],
       AMD: ["advanced micro devices", "amd"],
       TSM: ["tsmc", "taiwan semiconductor", "台積電"],
+      AAPL: ["apple", "蘋果"],
+      MSFT: ["microsoft", "微軟"],
       "0981.HK": ["smic", "中芯"],
     },
     keywords: [
@@ -177,6 +179,18 @@ export function isSectorRelevant(title: string, sector: IndustrySectorId): boole
   if (mentionedTickers(title, sector).length) return true;
   const hay = title.toLowerCase();
   return sectorSpec(sector).keywords.some((word) => hay.includes(word.toLowerCase()));
+}
+
+const MACRO =
+  /\b(tariff|trade war|export control|sanction|fed\b|interest rate|inflation|oil|brent|crude|war|ceasefire|embargo|ban)\b|關稅|貿易戰|出口管制|制裁|加息|減息|通脹|原油|油價|戰爭|禁令/;
+
+/** General breaking news the desk may map onto a watchlist name even if no ticker is named. */
+export function isMacroNews(title: string): boolean {
+  return MACRO.test(title);
+}
+
+export function keepSectorTape(title: string, sector: IndustrySectorId): boolean {
+  return isSectorRelevant(title, sector) || isMacroNews(title);
 }
 
 const POSITIVE =

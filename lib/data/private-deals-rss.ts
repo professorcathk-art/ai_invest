@@ -1,15 +1,30 @@
 import { googleNewsUrl, parseRss, uniqueRss, type RssItem } from "./rss";
+import { sourceLabel } from "./deal-sources";
 import type { PrivateDeal } from "./private-market";
+import { cleanCompanyName, formatDealSize, isUsableCompanyName } from "./private-market";
 
 const DEAL_CORE =
   /\b(acquir\w*|merger|merges|merging|buyout|takeover|series [a-g]\b|seed round|private equity|lbo|spac)\b|收購|併購|融資|私募/;
-const DEAL_FUNDING =
-  /\b(raises?|funding|invests?)\b/i;
+const DEAL_FUNDING = /\b(raises?|funding|invests?)\b/i;
 const DEAL_MONEY = /\$[\d.,]+|\b(million|billion|mn|bn)\b|輪/;
 
 export function isDealHeadline(title: string): boolean {
   if (DEAL_CORE.test(title)) return true;
   return DEAL_FUNDING.test(title) && DEAL_MONEY.test(title);
+}
+
+export async function collectDealHeadlines(locale: "en" | "zh" = "en"): Promise<RssItem[]> {
+  const query =
+    locale === "zh"
+      ? "收購 OR 併購 OR 私募 OR 融資 OR 創投 OR Series A"
+      : 'merger OR acquisition OR buyout OR "series B" OR "series C" OR "raises $" OR "private equity"';
+  const [google, techcrunch, crunchbase, reuters] = await Promise.all([
+    parseRss(googleNewsUrl(query, locale), "Google News", 16),
+    parseRss("https://techcrunch.com/category/venture/feed/", "TechCrunch", 12),
+    parseRss("https://news.crunchbase.com/feed/", "Crunchbase News", 12),
+    parseRss("https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "Reuters", 12),
+  ]);
+  return (await uniqueRss([google, techcrunch, crunchbase, reuters], 40)).filter((item) => isDealHeadline(item.title));
 }
 
 export function dealFromHeadline(item: RssItem): PrivateDeal | null {
@@ -30,43 +45,30 @@ export function dealFromHeadline(item: RssItem): PrivateDeal | null {
     target = merge[2]?.split(/[,.(–—]/)[0]?.trim() ?? "";
     dealType = "Merger";
   } else if (raise) {
-    target = raise[1]?.replace(/[:|-].*$/, "").trim() ?? item.title.slice(0, 80);
+    target = raise[1]?.replace(/[:|-].*$/, "").trim() ?? "";
     dealType = /series [a-g]/i.test(item.title) ? "Venture round" : "Funding";
   } else {
-    target = item.title.slice(0, 96);
+    return null;
   }
-  if (!target) return null;
+  target = cleanCompanyName(target);
+  acquirer = cleanCompanyName(acquirer);
+  if (!isUsableCompanyName(target)) return null;
+  const url = item.url;
   return {
-    id: `${item.publisher}-${item.title}`.slice(0, 160),
+    id: `${item.publisher}-${target}`.slice(0, 160),
     announcedOn: item.publishedAt,
     target,
-    acquirer,
+    acquirer: acquirer && acquirer !== target ? acquirer : "",
     sector: "",
     dealType,
-    dealSize: money,
+    dealSize: formatDealSize(money),
     leadInvestors: "",
-    url: item.url,
+    sources: url ? [{ label: sourceLabel(url, item.publisher, item.title), url }] : [],
+    url,
   };
 }
 
 export async function fetchPrivateDealHeadlines(locale: "en" | "zh" = "en"): Promise<PrivateDeal[]> {
-  const query =
-    locale === "zh"
-      ? "收購 OR 併購 OR 私募 OR 融資 OR 創投 OR Series A"
-      : 'merger OR acquisition OR buyout OR "series B" OR "series C" OR "raises $" OR "private equity"';
-  const [google, techcrunch, crunchbase, reuters] = await Promise.all([
-    parseRss(googleNewsUrl(query, locale), "Google News", 16),
-    parseRss("https://techcrunch.com/category/venture/feed/", "TechCrunch", 12),
-    parseRss("https://news.crunchbase.com/feed/", "Crunchbase News", 12),
-    parseRss("https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "Reuters", 12),
-  ]);
-  const items = await uniqueRss([google, techcrunch, crunchbase, reuters], 40);
-  const deals = items.map(dealFromHeadline).filter((row): row is PrivateDeal => row != null);
-  const seen = new Set<string>();
-  return deals.filter((deal) => {
-    const key = `${deal.target}|${deal.acquirer}|${deal.dealSize}|${deal.announcedOn}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const items = await collectDealHeadlines(locale);
+  return items.map(dealFromHeadline).filter((row): row is PrivateDeal => row != null);
 }

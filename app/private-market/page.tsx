@@ -6,6 +6,30 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/components/i18n/provider";
 import type { PrivateDeal } from "@/lib/data/private-market";
 
+function SourcesCell({ deal }: { deal: PrivateDeal }) {
+  const sources = deal.sources?.length
+    ? deal.sources
+    : deal.url
+      ? [{ label: "Source", url: deal.url }]
+      : [];
+  if (!sources.length) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="flex flex-wrap gap-x-2 gap-y-1">
+      {sources.map((source) => (
+        <a
+          key={source.url}
+          href={source.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-tech hover:underline"
+        >
+          {source.label}
+        </a>
+      ))}
+    </span>
+  );
+}
+
 function sizeBucket(dealSize: string): "small" | "mid" | "large" | "unknown" {
   const n = Number(dealSize.replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(n) || n <= 0) return "unknown";
@@ -115,6 +139,7 @@ export default function PrivateMarketPage() {
                 <th className="px-3 py-2 font-medium">{t("privateSector")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateSize")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateLead")}</th>
+                <th className="px-3 py-2 font-medium">{t("privateSources")}</th>
               </tr>
             </thead>
             <tbody>
@@ -123,20 +148,15 @@ export default function PrivateMarketPage() {
                   <td className="font-financial px-3 py-2 whitespace-nowrap">
                     {deal.announcedOn ? deal.announcedOn.slice(0, 10) : "—"}
                   </td>
-                  <td className="px-3 py-2">
-                    {deal.url ? (
-                      <a href={deal.url} target="_blank" rel="noreferrer" className="hover:underline">
-                        {deal.target}
-                      </a>
-                    ) : (
-                      deal.target
-                    )}
-                  </td>
+                  <td className="px-3 py-2">{deal.target || "—"}</td>
                   <td className="px-3 py-2">{deal.acquirer || "—"}</td>
                   <td className="px-3 py-2">{deal.dealType || "—"}</td>
                   <td className="px-3 py-2">{deal.sector || "—"}</td>
                   <td className="font-financial px-3 py-2">{deal.dealSize || "—"}</td>
                   <td className="px-3 py-2">{deal.leadInvestors || "—"}</td>
+                  <td className="px-3 py-2">
+                    <SourcesCell deal={deal} />
+                  </td>
                 </tr>
               ))}
             </tbody>

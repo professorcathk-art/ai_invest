@@ -13,8 +13,9 @@ describe("dealFromHeadline", () => {
       acquirer: "Acme",
       target: "WidgetCo",
       dealType: "M&A",
-      dealSize: "$1.2 billion",
+      dealSize: "$1.2B",
     });
+    expect(deal?.sources[0]?.label).toBe("Reuters");
   });
 
   it("parses a funding headline and ignores non-deal news", () => {

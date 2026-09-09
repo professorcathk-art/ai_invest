@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyHeadline,
+  isMacroNews,
   isSectorRelevant,
+  keepSectorTape,
   mentionedTickers,
   parseNameCalls,
   publishedDateHkt,
@@ -11,15 +13,17 @@ import { hktCalendarDate, shiftIsoDate } from "../industry-sectors";
 
 describe("sector digest tape", () => {
   it("only hangs a ticker on a headline when the name is actually there", () => {
-    expect(mentionedTickers("Nvidia wins a large GPU order from Microsoft", "ai")).toEqual(["NVDA"]);
+    expect(mentionedTickers("Nvidia wins a large GPU order from Microsoft", "ai")).toEqual(["NVDA", "MSFT"]);
     expect(mentionedTickers("Costco raises membership fee", "consumer")).toEqual(["COST"]);
     expect(mentionedTickers("U.S. military destroys five Iranian oil tankers", "ai")).toEqual([]);
     expect(mentionedTickers("Stock futures are little changed overnight", "consumer")).toEqual([]);
   });
 
-  it("drops generic wires that do not belong to the sector", () => {
-    expect(isSectorRelevant("U.S. military destroys five Iranian oil tankers", "ai")).toBe(false);
-    expect(isSectorRelevant("Brent crude jumps after weekend attacks", "consumer")).toBe(false);
+  it("keeps unnamed breaking news for the committee to map onto names", () => {
+    expect(mentionedTickers("U.S. military destroys five Iranian oil tankers", "ai")).toEqual([]);
+    expect(isMacroNews("U.S. military destroys five Iranian oil tankers")).toBe(true);
+    expect(keepSectorTape("U.S. military destroys five Iranian oil tankers", "ai")).toBe(true);
+    expect(keepSectorTape("Brent crude jumps after weekend attacks", "consumer")).toBe(true);
     expect(isSectorRelevant("TSMC raises advanced-node foundry prices", "ai")).toBe(true);
     expect(isSectorRelevant("Tencent cloud signs a new enterprise deal", "china-internet")).toBe(true);
   });

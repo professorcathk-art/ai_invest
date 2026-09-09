@@ -138,6 +138,7 @@ export default function PrivateMarketPage() {
                 <th className="px-3 py-2 font-medium">{t("privateType")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateSector")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateSize")}</th>
+                <th className="px-3 py-2 font-medium">{t("privateValuation")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateLead")}</th>
                 <th className="px-3 py-2 font-medium">{t("privateSources")}</th>
               </tr>
@@ -153,6 +154,7 @@ export default function PrivateMarketPage() {
                   <td className="px-3 py-2">{deal.dealType || "—"}</td>
                   <td className="px-3 py-2">{deal.sector || "—"}</td>
                   <td className="font-financial px-3 py-2">{deal.dealSize || "—"}</td>
+                  <td className="font-financial px-3 py-2">{deal.valuation || "—"}</td>
                   <td className="px-3 py-2">{deal.leadInvestors || "—"}</td>
                   <td className="px-3 py-2">
                     <SourcesCell deal={deal} />

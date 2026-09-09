@@ -7,6 +7,8 @@ import {
   cleanCompanyName,
   formatDealSize,
   isUsableCompanyName,
+  extractRaiseSize,
+  extractValuation,
   mergeDealRows,
   type PrivateDeal,
 } from "@/lib/data/private-market";
@@ -20,6 +22,7 @@ const digestSchema = z.object({
       sector: z.string().optional().default(""),
       dealType: z.string().optional().default(""),
       dealSize: z.string().optional().default(""),
+      valuation: z.string().optional().default(""),
       leadInvestors: z.string().optional().default(""),
       announcedOn: z.string().nullable().optional(),
       sourceIndexes: z.array(z.number().int()).min(1).max(8),
@@ -50,11 +53,12 @@ export async function digestDealTape(headlines: RssItem[], structured: PrivateDe
 HARD RULES:
 - target MUST be a short company name only — never the full headline, never "Exclusive", never a truncated phrase like "French A.I. Start".
 - The same transaction mentioned by several headlines is ONE deal. Put every matching headline index in sourceIndexes.
-- acquirer, leadInvestors, sector, dealSize: copy from the text or leave "".
+- acquirer, leadInvestors, sector, dealSize, valuation: copy from the text or leave "".
+- dealSize is capital raised (e.g. "raises $50M"). valuation is post-money (e.g. "at a $400M valuation"). Never swap them. Never invent a dollar amount.
 - Never invent a buyer, advisor, or dollar amount that is not in a headline.
-- dealType is Funding, Venture round, M&A, or Merger.
+- dealType is Funding, Venture round, YC launch, M&A, or Merger.
 - announcedOn is YYYY-MM-DD when the headline date is known, else null.
-Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Artificial Intelligence","dealType":"Funding","dealSize":"$2B","leadInvestors":"","announcedOn":"2026-09-08","sourceIndexes":[0,3] }] }`,
+Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Artificial Intelligence","dealType":"Funding","dealSize":"$2B","valuation":"$10B","leadInvestors":"","announcedOn":"2026-09-08","sourceIndexes":[0,3] }] }`,
     prompt: JSON.stringify(
       {
         headlines: headlines.map((item, index) => ({
@@ -93,7 +97,8 @@ Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Art
         acquirer: cleanCompanyName(row.acquirer),
         sector: row.sector.trim(),
         dealType: row.dealType.trim() || "M&A",
-        dealSize: formatDealSize(row.dealSize),
+        dealSize: formatDealSize(row.dealSize) || extractRaiseSize(picked.map((item) => item.title).join(" ")),
+        valuation: formatDealSize(row.valuation) || extractValuation(picked.map((item) => item.title).join(" ")),
         leadInvestors: row.leadInvestors.trim(),
         sources: mergeSources(
           picked.map((item) => ({ label: sourceLabel(item.url, item.publisher, item.title), url: item.url })),

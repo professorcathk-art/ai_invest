@@ -14,6 +14,9 @@ const HOST_LABELS: Array<[RegExp, string]> = [
   [/ft\.com|financialtimes/i, "FT"],
   [/wsj\./i, "WSJ"],
   [/bbc\./i, "BBC"],
+  [/a16z\.|andreessen/i, "a16z"],
+  [/ycombinator\.|y combinator/i, "Y Combinator"],
+  [/sequoiacap\.|sequoia/i, "Sequoia"],
   [/google\./i, "Google News"],
   [/sec\.gov/i, "SEC"],
 ];

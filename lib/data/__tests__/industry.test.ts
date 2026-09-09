@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyHeadline,
+  headlineFitsLocale,
+  inDateWindow,
   isMacroNews,
   isSectorRelevant,
   keepSectorTape,
@@ -53,5 +55,13 @@ describe("sector digest tape", () => {
   it("maps RSS timestamps onto the Hong Kong calendar day", () => {
     expect(publishedDateHkt("2026-09-08T16:30:00Z")).toBe("2026-09-09");
     expect(shiftIsoDate(hktCalendarDate(new Date("2026-09-09T02:00:00+08:00")), -1)).toBe("2026-09-08");
+  });
+
+  it("keeps a three-day Hong Kong window and splits EN/ZH titles", () => {
+    expect(inDateWindow("2026-09-08T16:30:00Z", "2026-09-09", 3, false)).toBe(true);
+    expect(inDateWindow("2026-09-06T02:00:00Z", "2026-09-09", 3, false)).toBe(false);
+    expect(headlineFitsLocale("U.S. military destroys five Iranian oil tankers", "en")).toBe(true);
+    expect(headlineFitsLocale("美軍擊毀五艘伊朗油輪", "en")).toBe(false);
+    expect(headlineFitsLocale("美軍擊毀五艘伊朗油輪", "zh")).toBe(true);
   });
 });

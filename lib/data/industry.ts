@@ -3,11 +3,12 @@ import { fetchPublicHeadlines } from "./context";
 import { googleNewsUrl, parseRss, uniqueRss, type RssItem } from "./rss";
 import {
   emptyResearch,
+  headlineFitsLocale,
   hktCalendarDate,
+  inDateWindow,
   keepSectorTape,
   mentionedTickers,
   parseNameCalls,
-  publishedDateHkt,
   sectorSpec,
   shiftIsoDate,
   type IndustrySectorId,
@@ -44,7 +45,9 @@ export {
   INDUSTRY_SECTORS,
   classifyHeadline,
   emptyResearch,
+  headlineFitsLocale,
   hktCalendarDate,
+  inDateWindow,
   isIndustrySectorId,
   isMacroNews,
   isSectorRelevant,
@@ -60,10 +63,8 @@ export {
   type SectorResearch,
 } from "./industry-sectors";
 
-function onRequestedDate(item: RssItem, date: string, allowUndated: boolean): boolean {
-  const day = publishedDateHkt(item.publishedAt);
-  if (!day) return allowUndated;
-  return day === date;
+function inWindow(item: RssItem, date: string, days: number, allowUndated: boolean): boolean {
+  return inDateWindow(item.publishedAt, date, days, allowUndated);
 }
 
 export function toSectorHeadline(item: RssItem, sector: IndustrySectorId, extraTickers: string[] = []): SectorHeadline {
@@ -82,34 +83,37 @@ export async function collectSectorHeadlines(
   sector: IndustrySectorId,
   locale: Locale,
   date: string,
+  days = 3,
 ): Promise<SectorHeadline[]> {
   const spec = sectorSpec(sector);
   const today = hktCalendarDate();
   const allowUndated = date === today;
   const q = SECTOR_QUERIES[spec.id][locale];
   const extraFeed =
-    spec.id === "china-internet"
-      ? parseRss("https://www.scmp.com/rss/91/feed", "SCMP", 8)
-      : parseRss("https://feeds.bbci.co.uk/news/business/rss.xml", "BBC Business", 8);
+    locale === "zh" && spec.id === "china-internet"
+      ? parseRss("https://www.scmp.com/rss/91/feed", "SCMP", 10)
+      : parseRss("https://feeds.bbci.co.uk/news/business/rss.xml", "BBC Business", 10);
 
   const [tickerPacks, google, reuters, cnbc, extra] = await Promise.all([
     Promise.all(
       spec.tickers.slice(0, 4).map(async (ticker) => {
         const news = await fetchPublicHeadlines(ticker, locale);
         return news
-          .filter((item) => onRequestedDate(item, date, allowUndated))
+          .filter((item) => inWindow(item, date, days, allowUndated))
+          .filter((item) => headlineFitsLocale(item.title, locale))
           .map((item) => toSectorHeadline(item, sector));
       }),
     ),
-    parseRss(googleNewsUrl(q, locale), "Google News", 14),
-    parseRss("https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "Reuters", 8),
-    parseRss("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "CNBC", 8),
+    parseRss(googleNewsUrl(q, locale), "Google News", 18),
+    parseRss("https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "Reuters", 10),
+    parseRss("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "CNBC", 10),
     extraFeed,
   ]);
 
-  const wire = (await uniqueRss([google, reuters, cnbc, extra], 24))
-    .filter((item) => onRequestedDate(item, date, allowUndated))
+  const wire = (await uniqueRss([google, reuters, cnbc, extra], 48))
+    .filter((item) => inWindow(item, date, days, allowUndated))
     .filter((item) => keepSectorTape(item.title, sector))
+    .filter((item) => headlineFitsLocale(item.title, locale))
     .map((item) => toSectorHeadline(item, sector));
 
   const seen = new Set<string>();
@@ -121,38 +125,43 @@ export async function collectSectorHeadlines(
     headlines.push(item);
   }
   headlines.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
-  return headlines.slice(0, 16);
+  return headlines.slice(0, 36);
 }
 
 export async function loadSectorResearch(
   sector: IndustrySectorId,
   locale: Locale,
   date: string,
+  days = 3,
 ): Promise<SectorResearch> {
+  const windowDays = Math.min(7, Math.max(1, days));
+  const fromDate = shiftIsoDate(date, -(windowDays - 1));
+  const stamp = (row: SectorResearch, headlines: SectorHeadline[], live: boolean): SectorResearch => ({
+    ...row,
+    headlines: headlines.filter((item) => headlineFitsLocale(item.title, locale)),
+    fromDate,
+    windowDays,
+    live,
+    locale,
+  });
   const stored = await getIndustryDigest(sector, locale, date);
-  if (stored?.brief.length) {
-    const today = hktCalendarDate();
-    const yesterday = shiftIsoDate(today, -1);
-    if (date === today || date === yesterday) {
-      const headlines = await collectSectorHeadlines(sector, locale, date);
-      if (headlines.length) return { ...stored, headlines, live: date === today };
-    }
-    return stored;
-  }
   const today = hktCalendarDate();
-  const yesterday = shiftIsoDate(today, -1);
-  if (date !== today && date !== yesterday) {
-    return stored ?? emptyResearch(sector, date, locale);
+  const liveEnd = date >= shiftIsoDate(today, -2) && date <= today;
+  if (stored?.brief.length) {
+    if (liveEnd) {
+      const headlines = await collectSectorHeadlines(sector, locale, date, windowDays);
+      if (headlines.length) return stamp(stored, headlines, date === today);
+    }
+    return stamp(stored, stored.headlines, false);
+  }
+  if (!liveEnd) {
+    return stamp(stored ?? emptyResearch(sector, date, locale), stored?.headlines ?? [], false);
   }
   if (process.env.DEEPSEEK_API_KEY) {
-    return writeSectorDigest(sector, locale, date, !stored?.brief.length);
+    return writeSectorDigest(sector, locale, date, !stored?.brief.length, windowDays);
   }
-  const headlines = await collectSectorHeadlines(sector, locale, date);
-  return {
-    ...(stored ?? emptyResearch(sector, date, locale)),
-    headlines: headlines.length ? headlines : (stored?.headlines ?? []),
-    live: true,
-  };
+  const headlines = await collectSectorHeadlines(sector, locale, date, windowDays);
+  return stamp(stored ?? emptyResearch(sector, date, locale), headlines.length ? headlines : (stored?.headlines ?? []), true);
 }
 
 export async function writeSectorDigest(
@@ -160,12 +169,21 @@ export async function writeSectorDigest(
   locale: Locale,
   date: string,
   force = false,
+  days = 3,
 ): Promise<SectorResearch> {
   if (!force) {
     const stored = await getIndustryDigest(sector, locale, date);
-    if (stored?.brief.length) return stored;
+    if (stored?.brief.length) {
+      const headlines = await collectSectorHeadlines(sector, locale, date, days);
+      return {
+        ...stored,
+        headlines: headlines.length ? headlines : stored.headlines,
+        fromDate: shiftIsoDate(date, -(days - 1)),
+        windowDays: days,
+      };
+    }
   }
-  const headlines = await collectSectorHeadlines(sector, locale, date);
+  const headlines = await collectSectorHeadlines(sector, locale, date, days);
   const desk = await generateSectorDeskNote({
     sector,
     locale,
@@ -183,6 +201,8 @@ export async function writeSectorDigest(
     brief: desk.brief,
     persisted: true,
     live: false,
+    fromDate: shiftIsoDate(date, -(days - 1)),
+    windowDays: days,
   };
   const written = await upsertIndustryDigest(payload);
   return written ?? payload;

@@ -9,6 +9,7 @@ export interface PrivateDeal {
   sector: string;
   dealType: string;
   dealSize: string;
+  valuation?: string;
   leadInvestors: string;
   sources: DealSource[];
   url?: string;
@@ -38,6 +39,25 @@ export function formatDealSize(value: unknown): string {
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   return raw.startsWith("$") ? raw : `$${raw}`;
+}
+
+export function extractValuation(text: string): string {
+  const before = text.match(
+    /(?:valued(?:\s+at)?|valuation(?:\s+of)?|post-?money)\s*(?:of|at|:)?\s*(\$[\d.,]+\s*(?:billion|million|bn|mn|[bm])?)/i,
+  );
+  if (before) return formatDealSize(before[1]);
+  const after = text.match(/(\$[\d.,]+\s*(?:billion|million|bn|mn|[bm])?)\s+(?:valuation|post-?money)/i);
+  return after ? formatDealSize(after[1]) : "";
+}
+
+export function extractRaiseSize(text: string): string {
+  const raised = text.match(/raises?\s+(\$[\d.,]+\s*(?:billion|million|bn|mn|[bm])?)/i);
+  if (raised) return formatDealSize(raised[1]);
+  const atVal = extractValuation(text);
+  const money = [...text.matchAll(/\$[\d.,]+\s*(?:billion|million|bn|mn|[bm])?/gi)].map((row) => formatDealSize(row[0]));
+  const unique = money.filter((item, index) => item && money.indexOf(item) === index);
+  if (atVal) return unique.find((item) => item !== atVal) ?? "";
+  return unique[0] ?? "";
 }
 
 export function canonicalizeTarget(name: string): string {
@@ -71,7 +91,7 @@ const JUNK_TARGET = /^(exclusive|breaking|update|sources?|new|report|startup|sta
 
 export function isUsableCompanyName(name: string): boolean {
   if (!name || name === "—" || name.length < 2 || name.length > 64) return false;
-  if (JUNK_TARGET.test(name)) return false;
+  if (/^(a16z|andreessen horowitz|sequoia|y combinator|\byc\b)$/i.test(name)) return false;
   if (/\b(start-?up|raises?|acquire|merger|combine with|tracks private)\b/i.test(name) && name.split(/\s+/).length >= 4) {
     return false;
   }
@@ -142,7 +162,8 @@ export function parsePrivateDeals(raw: unknown): PrivateDeal[] {
       acquirer: acquirer && !sameCompany(acquirer, target) ? acquirer : "",
       sector: text(rec.industry ?? rec.sector ?? rec.targetedCompanyIndustry),
       dealType: text(rec.transactionType ?? rec.type ?? rec.dealType) || "M&A",
-      dealSize: formatDealSize(rec.transactionValue ?? rec.dealSize ?? rec.value),
+      dealSize: formatDealSize(rec.transactionValue ?? rec.dealSize ?? rec.value) || extractRaiseSize(text(rec.title)),
+      valuation: formatDealSize(rec.valuation ?? rec.postMoney) || extractValuation(text(rec.title)),
       leadInvestors: text(rec.leadInvestors ?? rec.investors ?? rec.advisor),
       sources,
       url: sources[0]?.url ?? url,
@@ -181,6 +202,7 @@ function combineDeals(cur: PrivateDeal, next: PrivateDeal): PrivateDeal {
     sector: cur.sector || next.sector,
     dealType: cur.dealType && cur.dealType !== "M&A / funding" ? cur.dealType : next.dealType || cur.dealType,
     dealSize: formatDealSize(cur.dealSize) || formatDealSize(next.dealSize),
+    valuation: formatDealSize(cur.valuation) || formatDealSize(next.valuation),
     leadInvestors: cur.leadInvestors || next.leadInvestors,
     sources: mergeSources([...cur.sources, ...next.sources]),
     announcedOn: cur.announcedOn || next.announcedOn,
@@ -221,6 +243,7 @@ export function mergeDealRows(rows: PrivateDeal[]): PrivateDeal[] {
       acquirer: cleanCompanyName(deal.acquirer),
       sources: mergeSources(deal.sources),
       dealSize: formatDealSize(deal.dealSize),
+      valuation: formatDealSize(deal.valuation),
     };
     const existingKey = findMergeKey(byKey, normalized);
     if (!existingKey) {

@@ -11,7 +11,7 @@ AGENTS="$HOME/Library/LaunchAgents"
 /usr/bin/python3 "$ROOT/scripts/generate_launchd.py"
 
 mkdir -p "$HOME/Library/Logs" "$AGENTS"
-chmod +x "$ROOT/scripts/run_ownership_sync.sh" "$ROOT/scripts/run_shortsell_sync.sh" "$ROOT/scripts/run_industry_digest.sh" "$ROOT/scripts/sync_public_feeds.sh" "$ROOT/scripts/warm_books.sh" "$ROOT/scripts/sync_ccass.py" "$ROOT/scripts/sync_shortsell.py"
+chmod +x "$ROOT/scripts/run_ownership_sync.sh" "$ROOT/scripts/run_shortsell_sync.sh" "$ROOT/scripts/run_industry_digest.sh" "$ROOT/scripts/run_vc_pe_sync.sh" "$ROOT/scripts/sync_public_feeds.sh" "$ROOT/scripts/warm_books.sh" "$ROOT/scripts/sync_ccass.py" "$ROOT/scripts/sync_shortsell.py" "$ROOT/scripts/sync_vc_pe.py"
 
 new_jobs=(
   com.investmouse.ccass-hk-1
@@ -23,6 +23,7 @@ new_jobs=(
   com.investmouse.warm-books
   com.investmouse.hkex-shortsell
   com.investmouse.industry-digest
+  com.investmouse.vc-pe
 )
 
 for label in "${new_jobs[@]}"; do

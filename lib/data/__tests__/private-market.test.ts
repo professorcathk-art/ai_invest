@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeTarget,
   cleanCompanyName,
+  extractRaiseSize,
+  extractValuation,
   formatDealSize,
   isUsableCompanyName,
   mergeDealRows,
@@ -21,6 +23,13 @@ describe("private deal digest helpers", () => {
     expect(formatDealSize("$2 billion")).toBe("$2B");
     expect(formatDealSize("$2 Billion")).toBe("$2B");
     expect(formatDealSize("$50M")).toBe("$50M");
+  });
+
+  it("splits raise size from post-money valuation", () => {
+    const title = "Lyte raises $165 million at a $1.2 billion valuation";
+    expect(extractRaiseSize(title)).toBe("$165M");
+    expect(extractValuation(title)).toBe("$1.2B");
+    expect(extractValuation("Cognition AI raises $2 billion")).toBe("");
   });
 
   it("groups the same deal and keeps multiple short source labels", () => {

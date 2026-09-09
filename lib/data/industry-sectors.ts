@@ -112,6 +112,8 @@ export interface SectorResearch {
   brief: string[];
   persisted: boolean;
   live: boolean;
+  fromDate?: string;
+  windowDays?: number;
 }
 
 export function isIndustrySectorId(value: string | null): value is IndustrySectorId {
@@ -189,6 +191,25 @@ export function isMacroNews(title: string): boolean {
   return MACRO.test(title);
 }
 
+export function inDateWindow(
+  publishedAt: string | null | undefined,
+  endDate: string,
+  days: number,
+  allowUndated: boolean,
+): boolean {
+  const day = publishedDateHkt(publishedAt);
+  if (!day) return allowUndated;
+  const start = shiftIsoDate(endDate, -(Math.max(1, days) - 1));
+  return day >= start && day <= endDate;
+}
+
+/** English UI keeps English wires; Chinese UI keeps 中文 plus English wires the HK desk still reads. */
+export function headlineFitsLocale(title: string, locale: "en" | "zh"): boolean {
+  const hasCjk = /[\u4e00-\u9fff]/.test(title);
+  if (locale === "en") return !hasCjk;
+  return true;
+}
+
 export function keepSectorTape(title: string, sector: IndustrySectorId): boolean {
   return isSectorRelevant(title, sector) || isMacroNews(title);
 }
@@ -253,7 +274,7 @@ export function parseHeadlines(value: unknown): SectorHeadline[] {
       } satisfies SectorHeadline;
     })
     .filter((row): row is SectorHeadline => row != null)
-    .slice(0, 20);
+    .slice(0, 40);
 }
 
 export function emptyResearch(
@@ -271,6 +292,8 @@ export function emptyResearch(
     brief: [],
     persisted: false,
     live: false,
+    fromDate: date,
+    windowDays: 1,
   };
 }
 
@@ -294,5 +317,7 @@ export function hydrateResearch(row: {
     brief: Array.isArray(row.brief) ? row.brief.map((item) => String(item).trim()).filter(Boolean).slice(0, 5) : [],
     persisted: true,
     live: false,
+    fromDate: String(row.as_of_date).slice(0, 10),
+    windowDays: 1,
   };
 }

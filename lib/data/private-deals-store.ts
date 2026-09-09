@@ -6,7 +6,7 @@ export async function listPrivateDeals(): Promise<PrivateDeal[]> {
   if (!db) return [];
   const { data, error } = await db
     .from("private_deals")
-    .select("id, announced_on, target, acquirer, sector, deal_type, deal_size, lead_investors, sources")
+    .select("id, announced_on, target, acquirer, sector, deal_type, deal_size, valuation, lead_investors, sources")
     .order("announced_on", { ascending: false })
     .limit(80);
   if (error || !data) return [];
@@ -19,6 +19,7 @@ export async function listPrivateDeals(): Promise<PrivateDeal[]> {
       sector: row.sector,
       dealType: row.deal_type,
       dealSize: row.deal_size,
+      valuation: row.valuation,
       leadInvestors: row.lead_investors,
       sources: row.sources,
     })),
@@ -41,6 +42,7 @@ export async function upsertPrivateDeals(rows: PrivateDeal[]): Promise<{ written
         sector: row.sector,
         deal_type: row.dealType,
         deal_size: row.dealSize,
+        valuation: row.valuation ?? "",
         lead_investors: row.leadInvestors,
         sources: row.sources,
       })),

@@ -11,6 +11,7 @@ SHORTSELL = ROOT / "scripts/run_shortsell_sync.sh"
 FEEDS = ROOT / "scripts/sync_public_feeds.sh"
 WARM = ROOT / "scripts/warm_books.sh"
 DIGEST = ROOT / "scripts/run_industry_digest.sh"
+VCPE = ROOT / "scripts/run_vc_pe_sync.sh"
 OUT = ROOT / "scripts/launchd"
 LOG = Path("/Users/mickeylau/Library/Logs")
 
@@ -132,6 +133,12 @@ def main() -> None:
             ["/bin/zsh", str(DIGEST)],
             "investmouse-industry-digest.log",
             calendar=weekday_clock(6, 15),
+        ),
+        "com.investmouse.vc-pe.plist": plist(
+            "com.investmouse.vc-pe",
+            ["/bin/zsh", str(VCPE)],
+            "investmouse-vc-pe.log",
+            calendar=weekday_clock(7, 45),
         ),
     }
     for name, body in jobs.items():

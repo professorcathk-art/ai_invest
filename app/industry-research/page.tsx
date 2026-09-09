@@ -11,6 +11,7 @@ import {
   hktCalendarDate,
   isIndustrySectorId,
   isIsoDate,
+  publishedDateHkt,
   shiftIsoDate,
   type IndustrySectorId,
   type SectorNameCall,
@@ -50,7 +51,7 @@ function IndustryResearchPage() {
   const yesterday = useMemo(() => shiftIsoDate(today, -1), [today]);
   const sectorParam = params.get("sector");
   const sector: IndustrySectorId = isIndustrySectorId(sectorParam) ? sectorParam : "ai";
-  const date = isIsoDate(params.get("date")) ? params.get("date")! : yesterday;
+  const date = isIsoDate(params.get("date")) ? params.get("date")! : today;
   const [data, setData] = useState<SectorResearch | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
@@ -63,7 +64,7 @@ function IndustryResearchPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/industry-research?sector=${sector}&lang=${locale}&date=${date}`)
+    fetch(`/api/industry-research?sector=${sector}&lang=${locale}&date=${date}&days=3`)
       .then((res) => res.json())
       .then((json) => {
         if (!cancelled) setData(json as SectorResearch);
@@ -80,6 +81,8 @@ function IndustryResearchPage() {
             brief: [],
             persisted: false,
             live: false,
+            fromDate: shiftIsoDate(date, -2),
+            windowDays: 3,
           });
         }
       });
@@ -103,7 +106,18 @@ function IndustryResearchPage() {
     };
   }, [sector, locale]);
 
-  const loading = !data || data.sector !== sector || data.date !== date;
+  const loading = !data || data.sector !== sector || data.date !== date || data.locale !== locale;
+  const fromDate = data?.fromDate ?? shiftIsoDate(date, -2);
+  const groupedNews = useMemo(() => {
+    const groups = new Map<string, NonNullable<SectorResearch["headlines"]>>();
+    for (const item of data?.headlines ?? []) {
+      const day = publishedDateHkt(item.publishedAt) || date;
+      const list = groups.get(day) ?? [];
+      list.push(item);
+      groups.set(day, list);
+    }
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [data?.headlines, date]);
 
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-3 py-6 sm:px-4 md:px-8">
@@ -125,21 +139,21 @@ function IndustryResearchPage() {
         </label>
         <button
           type="button"
+          onClick={() => replaceQuery({ date: today })}
+          className={`rounded-full border px-3 py-1.5 text-xs ${
+            date === today ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
+          }`}
+        >
+          {t("industryLast3Days")}
+        </button>
+        <button
+          type="button"
           onClick={() => replaceQuery({ date: yesterday })}
           className={`rounded-full border px-3 py-1.5 text-xs ${
             date === yesterday ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
           }`}
         >
           {t("industryYesterday")}
-        </button>
-        <button
-          type="button"
-          onClick={() => replaceQuery({ date: today })}
-          className={`rounded-full border px-3 py-1.5 text-xs ${
-            date === today ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
-          }`}
-        >
-          {t("industryToday")}
         </button>
         {dates.slice(0, 5).map((item) =>
           item === yesterday || item === today ? null : (
@@ -223,14 +237,17 @@ function IndustryResearchPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {t("industryNews")} · {date}
+            {t("industryNews")} · {fromDate} → {date}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {(data?.headlines ?? []).length === 0 && !loading ? (
             <p className="text-muted-foreground text-sm">{t("industryEmpty")}</p>
           ) : null}
-          {data?.headlines.map((item) => (
+          {groupedNews.map(([day, rows]) => (
+            <div key={day} className="space-y-3">
+              <p className="text-muted-foreground font-mono text-[11px] tracking-[0.12em] uppercase">{day}</p>
+              {rows.map((item) => (
             <article key={`${item.url}-${item.title}`} className="border-border/70 border-b pb-3 last:border-0">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 {item.tickers.length ? (
@@ -243,9 +260,6 @@ function IndustryResearchPage() {
                   <span className="text-muted-foreground text-[10px]">{t("industryNoTicker")}</span>
                 )}
                 <span className="text-muted-foreground text-[10px]">{item.publisher}</span>
-                {item.publishedAt ? (
-                  <span className="text-muted-foreground text-[10px]">{item.publishedAt.slice(0, 10)}</span>
-                ) : null}
               </div>
               {item.url ? (
                 <a href={item.url} target="_blank" rel="noreferrer" className="text-sm leading-relaxed hover:underline">
@@ -255,6 +269,8 @@ function IndustryResearchPage() {
                 <p className="text-sm leading-relaxed">{item.title}</p>
               )}
             </article>
+              ))}
+            </div>
           ))}
         </CardContent>
       </Card>

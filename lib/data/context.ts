@@ -58,9 +58,11 @@ async function parseRss(url: string, publisher: string): Promise<NewsItem[]> {
   return parse(url, publisher, 8);
 }
 
-async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
+async function yahooRssNews(symbol: string, locale: Locale = "en"): Promise<NewsItem[]> {
+  const lang = locale === "zh" ? "zh-Hant-HK" : "en-US";
+  const region = locale === "zh" && isHkTicker(symbol) ? "HK" : "US";
   return parseRss(
-    `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`,
+    `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=${region}&lang=${lang}`,
     "Yahoo Finance",
   );
 }
@@ -166,7 +168,7 @@ async function extraCompanyRss(ticker: string, name: string, locale: Locale): Pr
 export async function fetchPublicHeadlines(symbol: string, locale: Locale = "en"): Promise<NewsItem[]> {
   const ticker = normalizeSymbol(symbol);
   const [yahoo, google, extra] = await Promise.all([
-    yahooRssNews(ticker),
+    yahooRssNews(ticker, locale),
     googleNewsRss(ticker, ticker, locale),
     extraCompanyRss(ticker, ticker, locale),
   ]);
@@ -190,7 +192,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
   try {
     const yf = await client();
     const [rss, summary, insights] = await Promise.all([
-      yahooRssNews(ticker),
+      yahooRssNews(ticker, locale),
       yf
         .quoteSummary(ticker, {
           modules: ["assetProfile", "summaryProfile", "secFilings", "institutionOwnership"],

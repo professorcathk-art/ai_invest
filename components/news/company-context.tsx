@@ -72,7 +72,12 @@ export function CompanyContextPanel({ context }: { context: CompanyContext }) {
                   {t("filings")}
                 </div>
                 <ul className="space-y-1.5">
-                  {context.references.slice(0, 5).map((ref) => (
+                  {[
+                    ...context.references.filter((ref) => ref.kind === "filing"),
+                    ...context.references.filter((ref) => ref.kind !== "filing"),
+                  ]
+                    .slice(0, 8)
+                    .map((ref) => (
                     <li key={ref.url}>
                       <a
                         href={ref.url}

@@ -50,9 +50,9 @@ Headlines come from **Yahoo Finance ticker RSS**, **Google News** (Reuters / Mar
 | HK short-selling turnover | Official [HKEX Short Selling Turnover Today](https://www.hkex.com.hk/eng/stat/smstat/ssturnover/sstoday.htm) (`ASHTMAIN` / `ASHTGEM` after the close) |
 | Private-market deals | FMP M&A if keyed; otherwise TechCrunch / Crunchbase / Reuters / Google News RSS |
 
-Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, 72-hour IC memo cache (`cached_analyses`), analysis snapshots, and ownership / CCASS rows. No extra Supabase settings beyond that.
+Apply the SQL in `supabase/migrations/` to a Supabase project if you want financials cache, 72-hour IC memo cache (`cached_analyses`), analysis snapshots, ownership / CCASS rows, and stored annual reports (`company_filings` + the public `company-filings` bucket). No extra Supabase settings beyond that.
 
-**IC memos restore without a second DeepSeek call.** After a review finishes, the memo is written to `cached_analyses` (72h) and `localStorage`. Searching another ticker and coming back hydrates the last memo for that name. Clicking **Run IC** again with the same sliders / personas / locale also hits the server cache (⚡ badge). Changing sliders or seats still spends tokens.
+**IC memos restore without a second DeepSeek call.** The default committee is Buffett, Thiel, PE, Dalio, plus **行業專家 / Industry expert**. That seat reads a sourced annual-report excerpt when the Sunday filings job has stored one; it must not invent plant or process detail. After a review finishes, the memo is written to `cached_analyses` (72h) and `localStorage`. Searching another ticker and coming back hydrates the last memo for that name. Clicking **Run IC** again with the same sliders / personas / locale also hits the server cache (⚡ badge). Changing sliders or seats still spends tokens.
 
 Top-nav also has **Top-Down 行業研報 / Sector Research** (`/industry-research`) and **私募與併購 / Private Market** (`/private-market`). Sector research is a **weekly digest** (Hong Kong Monday–Sunday). Sector and **general breaking** headlines stay even when they omit a ticker. English UI keeps English wires and an English desk note; 繁中 keeps Chinese wires and 書面語. Helped / pressured names are inferred onto the watchlist and grouped **US vs HK** (`US: NVDA`, `HK: 0981.HK`). The Monday 06:15 HKT job writes last week; weekdays refresh the current week. Private-market rows are AI-digested from the **headline plus source snippet** into **one company per deal**, with sector inferred even when the title omits it. Investment size and valuation are filled only when the tape states them. The page stays blank when the public feed is empty — no invented Sequoia / a16z / KKR rows. The stock workbench **一圖讀懂公司業務 / Business Breakdown** tab uses FMP product / geographic segmentation when present; product cards still fill from the Yahoo description.
 
@@ -68,6 +68,7 @@ The iMac is on 24 hours, but **HKEX CCASS only publishes one file per trading da
 | `us-ownership` | 10:30, 16:30, 21:30 Mon–Fri | Yahoo 13F / Form 4 |
 | `industry-digest` | 06:15 Mon–Fri | Writes the current Hong Kong week into `industry_digests` (Monday also archives last week) |
 | `vc-pe` | 07:45 Mon–Fri | YC public launches + a16z announcement links into `private_deals` |
+| `filings` | 09:00 Sunday | Official HKEX / SEC annual reports into the `company-filings` bucket + `company_filings` |
 | `public-feeds` | hourly | Warms sector + private-market RSS |
 | `warm-books` | 07:15 Mon–Fri | Caches a short ticker list into `financial_snapshots` |
 

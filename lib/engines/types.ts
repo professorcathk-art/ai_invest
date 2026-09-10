@@ -162,7 +162,7 @@ export interface ThresholdCheck {
   format?: "pct" | "multiple" | "number" | "years";
 }
 
-export type PersonaId = "buffett" | "thiel" | "pe" | "dalio" | "trump" | "musk";
+export type PersonaId = "buffett" | "thiel" | "pe" | "dalio" | "expert" | "trump" | "musk";
 
 export interface PersonaScorecard {
   id: PersonaId;

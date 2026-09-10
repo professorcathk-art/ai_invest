@@ -11,7 +11,7 @@ import { fmpStatementYear } from "@/lib/data/fmp";
 import { parsePrivateDeals } from "@/lib/data/private-market";
 
 describe("selected personas", () => {
-  it("keeps catalog order and falls back to the original four", () => {
+  it("keeps catalog order and falls back to the default five", () => {
     expect(normalizeSelectedPersonas(["musk", "trump", "buffett"])).toEqual([
       "buffett",
       "trump",

@@ -8,6 +8,7 @@ const NAMES = {
   thiel: "Peter Thiel",
   pe: "PE Partner",
   dalio: "Ray Dalio",
+  expert: "Industry expert",
   trump: "Donald Trump",
   musk: "Elon Musk",
 } as const;

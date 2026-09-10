@@ -1,11 +1,11 @@
-export const PERSONA_IDS = ["buffett", "thiel", "pe", "dalio", "trump", "musk"] as const;
+export const PERSONA_IDS = ["buffett", "thiel", "pe", "dalio", "expert", "trump", "musk"] as const;
 
 export type PersonaId = (typeof PERSONA_IDS)[number];
 
-export const DEFAULT_PERSONA_IDS: PersonaId[] = ["buffett", "thiel", "pe", "dalio"];
+export const DEFAULT_PERSONA_IDS: PersonaId[] = ["buffett", "thiel", "pe", "dalio", "expert"];
 
 export const MIN_SELECTED_PERSONAS = 2;
-export const MAX_SELECTED_PERSONAS = 6;
+export const MAX_SELECTED_PERSONAS = 7;
 
 const PERSONA_SET = new Set<string>(PERSONA_IDS);
 
@@ -13,7 +13,7 @@ export function isPersonaId(value: unknown): value is PersonaId {
   return typeof value === "string" && PERSONA_SET.has(value);
 }
 
-/** Preserve catalog order. Fall back to the original four if the payload is too thin. */
+/** Preserve catalog order. Fall back to the default five if the payload is too thin. */
 export function normalizeSelectedPersonas(raw: unknown): PersonaId[] {
   const picked = new Set<PersonaId>();
   if (Array.isArray(raw)) {

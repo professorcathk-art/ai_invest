@@ -53,11 +53,12 @@ interface Payload {
   context: CompanyContext;
 }
 
-const PERSONA_LABEL: Record<PersonaId, "personaBuffett" | "personaThiel" | "personaPe" | "personaDalio" | "personaTrump" | "personaMusk"> = {
+const PERSONA_LABEL: Record<PersonaId, "personaBuffett" | "personaThiel" | "personaPe" | "personaDalio" | "personaExpert" | "personaTrump" | "personaMusk"> = {
   buffett: "personaBuffett",
   thiel: "personaThiel",
   pe: "personaPe",
   dalio: "personaDalio",
+  expert: "personaExpert",
   trump: "personaTrump",
   musk: "personaMusk",
 };

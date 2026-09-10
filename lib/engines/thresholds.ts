@@ -194,6 +194,49 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
     },
   ];
 
+  const expertChecks: ThresholdCheck[] = [
+    {
+      id: "gm",
+      label: "Gross margin (process quality)",
+      actual: num(vc.grossMargin),
+      target: "> 40%",
+      passed: vc.grossMargin == null ? null : vc.grossMargin > 0.4,
+      format: "pct",
+    },
+    {
+      id: "yoy",
+      label: "YoY revenue growth",
+      actual: num(vc.yoyGrowth),
+      target: "> 8%",
+      passed: vc.yoyGrowth == null ? null : vc.yoyGrowth > 0.08,
+      format: "pct",
+    },
+    {
+      id: "roic",
+      label: "ROIC (operating system)",
+      actual: num(vc.roic),
+      target: "> 12%",
+      passed: vc.roic == null ? null : vc.roic > 0.12,
+      format: "pct",
+    },
+    {
+      id: "conv",
+      label: "FCF conversion",
+      actual: num(vc.fcfConversion),
+      target: "> 50%",
+      passed: vc.fcfConversion == null ? null : vc.fcfConversion > 0.5,
+      format: "pct",
+    },
+    {
+      id: "capex",
+      label: "CapEx intensity",
+      actual: Number.isFinite(dcf.capexPct) ? num(dcf.capexPct) : null,
+      target: "< 20% sales",
+      passed: Number.isFinite(dcf.capexPct) ? dcf.capexPct < 0.2 : null,
+      format: "pct",
+    },
+  ];
+
   const dalioChecks: ThresholdCheck[] = [
     {
       id: "nd",
@@ -236,6 +279,7 @@ export function evaluatePersonas(vc: VcResult, lbo: LboResult, dcf: DcfResult): 
     make("thiel", "Peter Thiel", "Deep Tech / Early VC", thielChecks),
     make("pe", "PE Partner (KKR / BX)", "LBO / Buyout", peChecks),
     make("dalio", "Ray Dalio", "Macro / Risk Parity", dalioChecks),
+    make("expert", "Industry expert", "Sector / Process Quality", expertChecks),
     make("trump", "Donald Trump", "Macro / Dealmaker", trumpChecks),
     make("musk", "Elon Musk", "First Principles / Hard Tech", muskChecks),
   ];

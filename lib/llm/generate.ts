@@ -33,6 +33,7 @@ export const PERSONAS = [
   { id: "thiel" as const, name: "Peter Thiel", lens: PERSONA_LENSES.thiel },
   { id: "pe" as const, name: "PE Partner (KKR / Blackstone)", lens: PERSONA_LENSES.pe },
   { id: "dalio" as const, name: "Ray Dalio", lens: PERSONA_LENSES.dalio },
+  { id: "expert" as const, name: "Industry expert", lens: PERSONA_LENSES.expert },
   { id: "trump" as const, name: "Donald Trump", lens: PERSONA_LENSES.trump },
   { id: "musk" as const, name: "Elon Musk", lens: PERSONA_LENSES.musk },
 ];
@@ -137,7 +138,7 @@ export async function generateDebate(
     `${debateSystemPrompt(votes, sequence)}
 CURRENCY: Use company.reportingCurrency only. Never convert .HK names into USD. Never paste raw headline titles.
 ${languageRule(locale)}
-Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio"|"trump"|"musk","text":"..."}], "chairSummary":"..." }`,
+Return ONLY JSON: { "debate": [{"speaker":"buffett"|"thiel"|"pe"|"dalio"|"expert"|"trump"|"musk","text":"..."}], "chairSummary":"..." }`,
     `SPEAKER_SEQUENCE: ${sequence.join(" → ")}
 TURN_COUNT: exactly ${target} (allowed ${min}-${max}).
 

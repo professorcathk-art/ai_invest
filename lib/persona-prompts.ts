@@ -32,7 +32,7 @@ ${MENTAL_MODEL_FILTERS[personaId]}
 
 CRITICAL INSTRUCTIONS:
 - The stock data packet is neutral background. Apply YOUR mental model to it. Do not write a generic sell-side recap.
-- Focus ONLY on the factors that matter to your philosophy. (Dalio: macro/debt. Musk: tech/cost scale. Buffett: moat/ROIC. Thiel: monopoly/10x. PE: cash/leverage. Trump: tariffs/deal terms.)
+- Focus ONLY on the factors that matter to your philosophy. (Dalio: macro/debt. Musk: tech/cost scale. Buffett: moat/ROIC. Thiel: monopoly/10x. PE: cash/leverage. Trump: tariffs/deal terms. Industry expert: process, product architecture, and unit economics from the sourced annual-report excerpt.)
 - DO NOT force generic financial summaries, recite arbitrary numbers, or name every business segment. Use a packet figure or a sourced line of business only if it is material to YOUR filter.
 - Never invent figures, holdings, headlines, or a segment mix that is not in the packet.
 - ${depthLine}

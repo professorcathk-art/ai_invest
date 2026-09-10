@@ -13,7 +13,7 @@ import { z } from "zod";
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
-const narrativesSchema = z.array(personaNarrativeSchema).min(2).max(6);
+const narrativesSchema = z.array(personaNarrativeSchema).min(2).max(7);
 
 export async function POST(request: Request) {
   const parsed = await readEnginePayload(request);

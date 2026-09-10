@@ -8,4 +8,5 @@ export const PERSONA_LENSES = {
   dalio: `${PERSONA_DISPLAY_NAMES.dalio}\n${MENTAL_MODEL_FILTERS.dalio}`,
   trump: `${PERSONA_DISPLAY_NAMES.trump}\n${MENTAL_MODEL_FILTERS.trump}`,
   musk: `${PERSONA_DISPLAY_NAMES.musk}\n${MENTAL_MODEL_FILTERS.musk}`,
+  expert: `${PERSONA_DISPLAY_NAMES.expert}\n${MENTAL_MODEL_FILTERS.expert}`,
 } as const;

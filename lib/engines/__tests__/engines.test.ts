@@ -152,7 +152,7 @@ describe("VC", () => {
 describe("bundle", () => {
   it("keeps LLM-free scorecards deterministic", () => {
     const bundle = runEngines(fixture(), sliders);
-    expect(bundle.personas).toHaveLength(6);
+    expect(bundle.personas).toHaveLength(7);
     expect(bundle.personas.every((p) => p.score >= 0 && p.score <= 100)).toBe(true);
   });
 

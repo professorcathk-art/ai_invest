@@ -222,7 +222,7 @@ export async function loadSectorResearch(
     );
   }
   if (process.env.DEEPSEEK_API_KEY) {
-    return writeSectorDigest(sector, locale, weekStart, !stored || !hasDeskNote(stored), 7);
+    return writeSectorDigest(sector, locale, weekStart, !stored || !hasDeskNote(stored));
   }
   const headlines = await collectSectorHeadlines(sector, locale, tapeEnd, windowDays);
   return stampResearch(

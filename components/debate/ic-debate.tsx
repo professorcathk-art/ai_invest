@@ -14,6 +14,7 @@ const ACCENT: Record<string, string> = {
   thiel: "border-l-tech",
   pe: "border-l-caution",
   dalio: "border-l-bear",
+  expert: "border-l-tech",
   trump: "border-l-caution",
   musk: "border-l-tech",
 };

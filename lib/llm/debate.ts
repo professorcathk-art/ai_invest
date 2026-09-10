@@ -177,6 +177,7 @@ const NAMES_EN: Record<PersonaId, string> = {
   thiel: "Thiel",
   pe: "the PE partner",
   dalio: "Dalio",
+  expert: "the industry expert",
   trump: "Trump",
   musk: "Musk",
 };
@@ -185,6 +186,7 @@ const NAMES_ZH: Record<PersonaId, string> = {
   thiel: "Thiel",
   pe: "PE Partner",
   dalio: "達利歐",
+  expert: "行業專家",
   trump: "特朗普",
   musk: "馬斯克",
 };
@@ -193,6 +195,7 @@ const ANGLES_EN: Record<PersonaId, string> = {
   thiel: "monopoly vs commodity tech",
   pe: "supply chain and debt coverage",
   dalio: "cycle and refinancing risk",
+  expert: "process quality and product architecture",
   trump: "deal terms versus tariff and US/China tape",
   musk: "first-principles cost and factory speed",
 };
@@ -201,6 +204,7 @@ const ANGLES_ZH: Record<PersonaId, string> = {
   thiel: "壟斷對商品化科技",
   pe: "供應鏈與債務覆蓋",
   dalio: "周期與再融資風險",
+  expert: "製程品質與產品架構",
   trump: "交易條款對關稅與中美政策",
   musk: "第一性原理成本與產能速度",
 };
@@ -209,6 +213,7 @@ const CONDITIONS_EN: Record<PersonaId, string> = {
   thiel: "If a true 10x wedge appears versus substitutes",
   pe: "If FCF still covers 6.5% interest after a 20% EBITDA miss",
   dalio: "If net leverage stays refinanceable through a rates shock",
+  expert: "If the sourced filing shows a process or product gap peers cannot copy in 24 months",
   trump: "If the sourced DCF discount stays above 15% after the tariff tape",
   musk: "If CapEx intensity falls while volume still scales",
 };
@@ -217,6 +222,7 @@ const CONDITIONS_ZH: Record<PersonaId, string> = {
   thiel: "若相對替代品出現真正的 10 倍優勢",
   pe: "若 EBITDA 下跌 20% 後自由現金流仍能覆蓋 6.5% 利息",
   dalio: "若淨槓桿在利率衝擊下仍可再融資",
+  expert: "若來源年報顯示同業 24 個月內難以複製的製程或產品差距",
   trump: "若計及關稅消息後，來源 DCF 折讓仍高於 15%",
   musk: "若資本開支強度下降而產量仍能擴張",
 };
@@ -363,7 +369,7 @@ OUTPUT FORMAT (JSON only):
 Return JSON with "debate" array and "chairSummary":
 {
   "debate": [
-    { "speaker": "buffett"|"thiel"|"pe"|"dalio"|"trump"|"musk", "text": "..." }
+    { "speaker": "buffett"|"thiel"|"pe"|"dalio"|"expert"|"trump"|"musk", "text": "..." }
   ],
   "chairSummary": "Dense 2-sentence summary of consensus, primary dissent, and key catalyst that would flip the vote."
 }`;

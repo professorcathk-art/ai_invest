@@ -64,6 +64,17 @@ export const INVESTOR_KNOWLEDGE_BASE = {
       "Failure is an option here. If things are not failing, you are not innovating enough.",
     ],
   },
+  expert: {
+    core_principles: [
+      "Industry Process Literacy: Explain how the company actually makes, delivers, or underwrites the product — plants, protocols, platforms, or claims — from sourced filings only.",
+      "Technical Differentiation: Is the moat a process, a standard, a data loop, or a regulatory license that peers cannot copy in 24 months?",
+      "Unit Economics of the Core Activity: Tie gross margin, capex intensity, and FCF conversion to the physical or digital production system, not to a generic multiple.",
+      "Filing Fidelity: Prefer the annual-report / 10-K excerpt. If a plant, molecule, node, or SKU is not in the packet, do not invent it.",
+    ],
+    iconic_quotes: [
+      "The map is not the territory — read the process, then judge the numbers.",
+    ],
+  },
 } as const;
 
 export type KnowledgePersonaId = keyof typeof INVESTOR_KNOWLEDGE_BASE;
@@ -75,6 +86,7 @@ export const PERSONA_DISPLAY_NAMES: Record<KnowledgePersonaId, string> = {
   dalio: "Ray Dalio",
   trump: "Donald Trump in dealmaker mode",
   musk: "Elon Musk",
+  expert: "an industry technical expert on this company's sector",
 };
 
 /** What this persona is allowed to care about — everything else is noise. */
@@ -90,4 +102,6 @@ export const MENTAL_MODEL_FILTERS: Record<KnowledgePersonaId, string> = {
     "Evaluate this company through tariffs, trade policy, regulatory leverage, and deal terms.",
   musk:
     "Evaluate this company through First Principles engineering, manufacturing scalability, and unit cost curves.",
+  expert:
+    "Evaluate this company as a sector technical expert. Discuss product architecture, process, and operating detail from the sourced annual-report excerpt. Do not invent plant, process, or product facts that are not in the packet.",
 };

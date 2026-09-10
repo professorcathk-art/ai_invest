@@ -1,4 +1,6 @@
 import type { Locale } from "@/lib/i18n/messages";
+import { filingExcerptBrief, filingLabel } from "./filings";
+import { listCompanyFilings } from "./filings-store";
 import { fmpStable } from "./fmp-client";
 import { isHkTicker, normalizeSymbol } from "./normalize";
 
@@ -28,6 +30,7 @@ export interface CompanyContext {
   references: SourceRef[];
   ownershipBrief?: string;
   segmentBrief?: string;
+  filingBrief?: string;
 }
 
 export const emptyContext = (): CompanyContext => ({
@@ -89,17 +92,20 @@ function pushRef(list: SourceRef[], ref: SourceRef) {
   list.push(ref);
 }
 
-function filingLinks(ticker: string, name: string): SourceRef[] {
+function filingLinks(ticker: string, name: string, hasStoredAnnual = false): SourceRef[] {
   const symbol = normalizeSymbol(ticker);
   const code = symbol.replace(/\.HK$/i, "").replace(/^0+/, "") || symbol;
   const q = encodeURIComponent(`${name} ${symbol}`);
-  const refs: SourceRef[] = [
-    {
+  const refs: SourceRef[] = [];
+  if (!hasStoredAnnual) {
+    refs.push({
       title: `${name} investor relations / annual report search`,
       source: "Company IR",
       url: `https://www.google.com/search?q=${encodeURIComponent(`${name} investor relations annual report`)}`,
       kind: "report",
-    },
+    });
+  }
+  refs.push(
     {
       title: `Financial Times coverage — ${symbol}`,
       source: "Financial Times",
@@ -124,14 +130,16 @@ function filingLinks(ticker: string, name: string): SourceRef[] {
       url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/financials`,
       kind: "report",
     },
-  ];
+  );
   if (isHkTicker(symbol)) {
-    refs.push({
-      title: `${name} HKEX announcements / annual results`,
-      source: "HKEX",
-      url: `https://www1.hkexnews.hk/search/titlesearch.xhtml?lang=en`,
-      kind: "filing",
-    });
+    if (!hasStoredAnnual) {
+      refs.push({
+        title: `${name} HKEX announcements / annual results`,
+        source: "HKEX",
+        url: `https://www1.hkexnews.hk/search/titlesearch.xhtml?lang=en`,
+        kind: "filing",
+      });
+    }
     refs.push({
       title: `${symbol} HKEX quote`,
       source: "HKEX",
@@ -139,12 +147,14 @@ function filingLinks(ticker: string, name: string): SourceRef[] {
       kind: "report",
     });
   } else {
-    refs.push({
-      title: `${name} SEC EDGAR filings (10-K, 10-Q, 8-K, 13G/D)`,
-      source: "SEC EDGAR",
-      url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${encodeURIComponent(name)}&type=&dateb=&owner=exclude&count=10`,
-      kind: "filing",
-    });
+    if (!hasStoredAnnual) {
+      refs.push({
+        title: `${name} SEC EDGAR filings (10-K, 10-Q, 8-K, 13G/D)`,
+        source: "SEC EDGAR",
+        url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${encodeURIComponent(name)}&type=&dateb=&owner=exclude&count=10`,
+        kind: "filing",
+      });
+    }
     refs.push({
       title: `Institutional 13F holder search — ${symbol}`,
       source: "SEC EDGAR",
@@ -188,6 +198,15 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
   const references: SourceRef[] = [];
   let businessSummary = "";
   let companyName = ticker;
+  const storedFilings = await listCompanyFilings(ticker, 6);
+  for (const filing of storedFilings) {
+    pushRef(references, {
+      title: filing.title || filingLabel(filing),
+      source: filing.docType === "annual_report" ? "HKEX / stored" : "SEC / stored",
+      url: filing.publicUrl,
+      kind: "filing",
+    });
+  }
 
   try {
     const yf = await client();
@@ -309,7 +328,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
   ]);
   news.push(...google, ...extra);
 
-  for (const link of filingLinks(ticker, companyName)) pushRef(references, link);
+  for (const link of filingLinks(ticker, companyName, storedFilings.length > 0)) pushRef(references, link);
 
   const seenNews = new Set<string>();
   const uniqueNews = news.filter((item) => {
@@ -331,6 +350,7 @@ export async function fetchCompanyContext(symbol: string, locale: Locale = "en")
     news: uniqueNews.slice(0, 10),
     highlights: uniqueHighlights.slice(0, 8),
     references: references.slice(0, 14),
+    filingBrief: filingExcerptBrief(storedFilings),
   };
 }
 
@@ -352,6 +372,9 @@ export function contextBrief(ctx: CompanyContext): string {
     ctx.ownershipBrief
       ? `Ownership / CCASS / 13F (use these figures only; do not invent holdings):\n${ctx.ownershipBrief}`
       : "",
+    ctx.filingBrief
+      ? `Sourced annual-report / 10-K excerpt (use for product, technology, and operating detail; do not invent process steps that are not here):\n${ctx.filingBrief}`
+      : "Sourced annual-report excerpt: none in this packet. Do not invent plant, process, or product-architecture details.",
     refs ? `Primary public sources (use as background; do not invent filings or paste titles verbatim):\n${refs}` : "",
   ]
     .filter(Boolean)

@@ -12,6 +12,7 @@ FEEDS = ROOT / "scripts/sync_public_feeds.sh"
 WARM = ROOT / "scripts/warm_books.sh"
 DIGEST = ROOT / "scripts/run_industry_digest.sh"
 VCPE = ROOT / "scripts/run_vc_pe_sync.sh"
+FILINGS = ROOT / "scripts/run_filings_sync.sh"
 OUT = ROOT / "scripts/launchd"
 LOG = Path("/Users/mickeylau/Library/Logs")
 
@@ -139,6 +140,19 @@ def main() -> None:
             ["/bin/zsh", str(VCPE)],
             "investmouse-vc-pe.log",
             calendar=weekday_clock(7, 45),
+        ),
+        "com.investmouse.filings.plist": plist(
+            "com.investmouse.filings",
+            ["/bin/zsh", str(FILINGS)],
+            "investmouse-filings.log",
+            calendar="""    <dict>
+      <key>Weekday</key>
+      <integer>0</integer>
+      <key>Hour</key>
+      <integer>9</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>""",
         ),
     }
     for name, body in jobs.items():

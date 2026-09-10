@@ -1,8 +1,8 @@
 import { ingestAuthorized } from "@/lib/api/ingest-auth";
 import { fmpStable } from "@/lib/data/fmp-client";
 import { collectDealHeadlines } from "@/lib/data/private-deals-rss";
-import { replacePrivateDeals } from "@/lib/data/private-deals-store";
-import { keepDisplayDeals, parsePrivateDeals } from "@/lib/data/private-market";
+import { keepDisplayDeals, mergeDealRows, parsePrivateDeals } from "@/lib/data/private-market";
+import { listPrivateDeals, replacePrivateDeals } from "@/lib/data/private-deals-store";
 import type { RssItem } from "@/lib/data/rss";
 import { digestDealTape } from "@/lib/llm/private-deals";
 
@@ -23,6 +23,7 @@ function extraHeadlines(raw: unknown): RssItem[] {
       publisher: String(rec.publisher ?? "Wire").trim() || "Wire",
       url,
       publishedAt: rec.publishedAt ? String(rec.publishedAt) : null,
+      summary: String(rec.summary ?? rec.snippet ?? "").trim().slice(0, 800),
     });
   }
   return out.slice(0, 40);
@@ -62,7 +63,10 @@ export async function POST(request: Request) {
     collectDealHeadlines("en"),
   ]);
   const fmp = parsePrivateDeals(stable);
-  const deals = keepDisplayDeals(await digestDealTape([...headlines, ...extras], [...fmp, ...extraDeals]));
+  const stored = await listPrivateDeals();
+  const deals = keepDisplayDeals(
+    mergeDealRows([...stored, ...(await digestDealTape([...headlines, ...extras], [...fmp, ...extraDeals]))]),
+  );
   const result = await replacePrivateDeals(deals);
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 503 });
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
     deals: deals.slice(0, 8).map((row) => ({
       target: row.target,
       acquirer: row.acquirer,
-      dealSize: row.dealSize,
+      sector: row.sector,
       valuation: row.valuation,
       sources: row.sources.length,
     })),

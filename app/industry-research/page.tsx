@@ -8,11 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/components/i18n/provider";
 import {
   INDUSTRY_SECTORS,
+  groupNameCallsByMarket,
   hktCalendarDate,
   isIndustrySectorId,
   isIsoDate,
   publishedDateHkt,
   shiftIsoDate,
+  weekStartMonday,
   type IndustrySectorId,
   type SectorNameCall,
   type SectorResearch,
@@ -30,16 +32,26 @@ const SECTOR_LABEL: Record<IndustrySectorId, MessageKey> = {
 function NameList({ rows, empty, tone }: { rows: SectorNameCall[]; empty: string; tone: "bull" | "bear" }) {
   if (!rows.length) return <p className="text-muted-foreground text-sm">{empty}</p>;
   return (
-    <ul className="space-y-3">
-      {rows.map((row) => (
-        <li key={row.ticker}>
-          <Badge variant="outline" className={tone === "bull" ? "text-bull font-financial" : "text-bear font-financial"}>
-            {row.ticker}
-          </Badge>
-          <p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">{row.reason}</p>
-        </li>
+    <div className="space-y-4">
+      {groupNameCallsByMarket(rows).map((group) => (
+        <div key={group.market} className="space-y-3">
+          <p className="text-muted-foreground text-[11px] tracking-[0.14em] uppercase">{group.market}</p>
+          <ul className="space-y-3">
+            {group.rows.map((row) => (
+              <li key={row.ticker}>
+                <Badge
+                  variant="outline"
+                  className={tone === "bull" ? "text-bull font-financial" : "text-bear font-financial"}
+                >
+                  {group.market}: {row.ticker}
+                </Badge>
+                <p className="text-muted-foreground mt-1 text-xs leading-relaxed text-pretty">{row.reason}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -48,10 +60,11 @@ function IndustryResearchPage() {
   const router = useRouter();
   const params = useSearchParams();
   const today = useMemo(() => hktCalendarDate(), []);
-  const yesterday = useMemo(() => shiftIsoDate(today, -1), [today]);
+  const thisWeek = useMemo(() => weekStartMonday(today), [today]);
+  const lastWeek = useMemo(() => shiftIsoDate(thisWeek, -7), [thisWeek]);
   const sectorParam = params.get("sector");
   const sector: IndustrySectorId = isIndustrySectorId(sectorParam) ? sectorParam : "ai";
-  const date = isIsoDate(params.get("date")) ? params.get("date")! : today;
+  const date = weekStartMonday(isIsoDate(params.get("date")) ? params.get("date")! : thisWeek);
   const [data, setData] = useState<SectorResearch | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
@@ -64,7 +77,7 @@ function IndustryResearchPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/industry-research?sector=${sector}&lang=${locale}&date=${date}&days=3`)
+    fetch(`/api/industry-research?sector=${sector}&lang=${locale}&date=${date}&days=7`)
       .then((res) => res.json())
       .then((json) => {
         if (!cancelled) setData(json as SectorResearch);
@@ -81,8 +94,8 @@ function IndustryResearchPage() {
             brief: [],
             persisted: false,
             live: false,
-            fromDate: shiftIsoDate(date, -2),
-            windowDays: 3,
+            fromDate: date,
+            windowDays: 7,
           });
         }
       });
@@ -107,7 +120,8 @@ function IndustryResearchPage() {
   }, [sector, locale]);
 
   const loading = !data || data.sector !== sector || data.date !== date || data.locale !== locale;
-  const fromDate = data?.fromDate ?? shiftIsoDate(date, -2);
+  const fromDate = data?.fromDate ?? date;
+  const weekEnd = shiftIsoDate(fromDate, 6);
   const groupedNews = useMemo(() => {
     const groups = new Map<string, NonNullable<SectorResearch["headlines"]>>();
     for (const item of data?.headlines ?? []) {
@@ -132,31 +146,32 @@ function IndustryResearchPage() {
           <input
             type="date"
             value={date}
-            max={today}
-            onChange={(event) => replaceQuery({ date: event.target.value })}
+            max={thisWeek}
+            suppressHydrationWarning
+            onChange={(event) => replaceQuery({ date: weekStartMonday(event.target.value) })}
             className="border-border bg-card text-foreground h-10 rounded-md border px-3 font-mono text-sm"
           />
         </label>
         <button
           type="button"
-          onClick={() => replaceQuery({ date: today })}
+          onClick={() => replaceQuery({ date: thisWeek })}
           className={`rounded-full border px-3 py-1.5 text-xs ${
-            date === today ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
+            date === thisWeek ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
           }`}
         >
-          {t("industryLast3Days")}
+          {t("industryThisWeek")}
         </button>
         <button
           type="button"
-          onClick={() => replaceQuery({ date: yesterday })}
+          onClick={() => replaceQuery({ date: lastWeek })}
           className={`rounded-full border px-3 py-1.5 text-xs ${
-            date === yesterday ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
+            date === lastWeek ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
           }`}
         >
-          {t("industryYesterday")}
+          {t("industryLastWeek")}
         </button>
-        {dates.slice(0, 5).map((item) =>
-          item === yesterday || item === today ? null : (
+        {dates.slice(0, 6).map((item) =>
+          item === thisWeek || item === lastWeek ? null : (
             <button
               key={item}
               type="button"
@@ -165,7 +180,7 @@ function IndustryResearchPage() {
                 date === item ? "border-bull bg-bull/15 text-foreground" : "border-border text-muted-foreground"
               }`}
             >
-              {item}
+              {item} → {shiftIsoDate(item, 6)}
             </button>
           ),
         )}
@@ -237,7 +252,7 @@ function IndustryResearchPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
-            {t("industryNews")} · {fromDate} → {date}
+            {t("industryNews")} · {fromDate} → {weekEnd}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

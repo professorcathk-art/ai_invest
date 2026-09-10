@@ -2,17 +2,24 @@ import type { Locale } from "@/lib/i18n/messages";
 import { fetchPublicHeadlines } from "./context";
 import { googleNewsUrl, parseRss, uniqueRss, type RssItem } from "./rss";
 import {
+  digestWeekStarts,
   emptyResearch,
+  fallbackWatchlistCalls,
+  hasDeskNote,
   headlineFitsLocale,
   hktCalendarDate,
   inDateWindow,
+  inclusiveDays,
   keepSectorTape,
   mentionedTickers,
   parseNameCalls,
   sectorSpec,
-  shiftIsoDate,
+  tapeEndForWeek,
+  weekEndSunday,
+  weekStartMonday,
   type IndustrySectorId,
   type SectorHeadline,
+  type SectorNameCall,
   type SectorResearch,
 } from "./industry-sectors";
 import { getIndustryDigest, listIndustryDigestDates, upsertIndustryDigest } from "./industry-store";
@@ -44,18 +51,28 @@ const SECTOR_QUERIES: Record<IndustrySectorId, { en: string; zh: string }> = {
 export {
   INDUSTRY_SECTORS,
   classifyHeadline,
+  digestWeekStarts,
   emptyResearch,
+  fallbackWatchlistCalls,
+  groupNameCallsByMarket,
+  hasDeskNote,
   headlineFitsLocale,
   hktCalendarDate,
   inDateWindow,
+  inclusiveDays,
   isIndustrySectorId,
   isMacroNews,
   isSectorRelevant,
   keepSectorTape,
+  listingMarket,
   mentionedTickers,
   parseNameCalls,
   publishedDateHkt,
+  resolveWatchlistTicker,
   shiftIsoDate,
+  tapeEndForWeek,
+  weekEndSunday,
+  weekStartMonday,
   type IndustrySectorId,
   type HeadlineImpact,
   type SectorHeadline,
@@ -83,7 +100,7 @@ export async function collectSectorHeadlines(
   sector: IndustrySectorId,
   locale: Locale,
   date: string,
-  days = 3,
+  days = 7,
 ): Promise<SectorHeadline[]> {
   const spec = sectorSpec(sector);
   const today = hktCalendarDate();
@@ -128,40 +145,94 @@ export async function collectSectorHeadlines(
   return headlines.slice(0, 36);
 }
 
+function weekWindow(date: string, today = hktCalendarDate()) {
+  const weekStart = weekStartMonday(date);
+  const weekEnd = weekEndSunday(weekStart);
+  const tapeEnd = tapeEndForWeek(weekStart, today);
+  const windowDays = inclusiveDays(weekStart, tapeEnd);
+  return { weekStart, weekEnd, tapeEnd, windowDays, isCurrentWeek: weekStart === weekStartMonday(today) };
+}
+
+function stampResearch(
+  row: SectorResearch,
+  headlines: SectorHeadline[],
+  locale: Locale,
+  weekStart: string,
+  weekEnd: string,
+  live: boolean,
+): SectorResearch {
+  return {
+    ...row,
+    date: weekStart,
+    locale,
+    headlines: headlines.filter((item) => headlineFitsLocale(item.title, locale)),
+    fromDate: weekStart,
+    windowDays: inclusiveDays(weekStart, weekEnd),
+    live,
+  };
+}
+
+function mergeDesk(
+  desk: { brief: string[]; beneficiaries: SectorNameCall[]; atRisk: SectorNameCall[] },
+  headlines: SectorHeadline[],
+  sector: IndustrySectorId,
+  locale: Locale,
+): { brief: string[]; beneficiaries: SectorNameCall[]; atRisk: SectorNameCall[] } {
+  const spec = sectorSpec(sector);
+  const aliases = spec.aliases as Record<string, readonly string[]>;
+  let beneficiaries = parseNameCalls(desk.beneficiaries, spec.tickers, aliases);
+  let atRisk = parseNameCalls(desk.atRisk, spec.tickers, aliases);
+  let brief = desk.brief.map((item) => item.trim()).filter(Boolean).slice(0, 4);
+  if (!beneficiaries.length && !atRisk.length) {
+    const fallback = fallbackWatchlistCalls(headlines, sector, locale);
+    beneficiaries = fallback.beneficiaries;
+    atRisk = fallback.atRisk;
+  }
+  if (!brief.length && headlines.length) {
+    brief =
+      locale === "zh"
+        ? ["本週公開要聞已按觀察名單推斷受惠與受壓股份，並非單一股份的投委會投票。"]
+        : ["Weekly tape mapped onto the watchlist. This is not an IC vote on a single name."];
+  }
+  return { brief, beneficiaries, atRisk };
+}
+
 export async function loadSectorResearch(
   sector: IndustrySectorId,
   locale: Locale,
   date: string,
-  days = 3,
 ): Promise<SectorResearch> {
-  const windowDays = Math.min(7, Math.max(1, days));
-  const fromDate = shiftIsoDate(date, -(windowDays - 1));
-  const stamp = (row: SectorResearch, headlines: SectorHeadline[], live: boolean): SectorResearch => ({
-    ...row,
-    headlines: headlines.filter((item) => headlineFitsLocale(item.title, locale)),
-    fromDate,
-    windowDays,
-    live,
-    locale,
-  });
-  const stored = await getIndustryDigest(sector, locale, date);
-  const today = hktCalendarDate();
-  const liveEnd = date >= shiftIsoDate(today, -2) && date <= today;
-  if (stored?.brief.length) {
-    if (liveEnd) {
-      const headlines = await collectSectorHeadlines(sector, locale, date, windowDays);
-      if (headlines.length) return stamp(stored, headlines, date === today);
+  const { weekStart, weekEnd, tapeEnd, windowDays, isCurrentWeek } = weekWindow(date);
+  const stored = await getIndustryDigest(sector, locale, weekStart);
+  if (stored && hasDeskNote(stored)) {
+    if (isCurrentWeek) {
+      const headlines = await collectSectorHeadlines(sector, locale, tapeEnd, windowDays);
+      if (headlines.length) return stampResearch(stored, headlines, locale, weekStart, weekEnd, true);
     }
-    return stamp(stored, stored.headlines, false);
+    return stampResearch(stored, stored.headlines, locale, weekStart, weekEnd, false);
   }
-  if (!liveEnd) {
-    return stamp(stored ?? emptyResearch(sector, date, locale), stored?.headlines ?? [], false);
+  if (!isCurrentWeek) {
+    return stampResearch(
+      stored ?? emptyResearch(sector, weekStart, locale),
+      stored?.headlines ?? [],
+      locale,
+      weekStart,
+      weekEnd,
+      false,
+    );
   }
   if (process.env.DEEPSEEK_API_KEY) {
-    return writeSectorDigest(sector, locale, date, !stored?.brief.length, windowDays);
+    return writeSectorDigest(sector, locale, weekStart, !stored || !hasDeskNote(stored), 7);
   }
-  const headlines = await collectSectorHeadlines(sector, locale, date, windowDays);
-  return stamp(stored ?? emptyResearch(sector, date, locale), headlines.length ? headlines : (stored?.headlines ?? []), true);
+  const headlines = await collectSectorHeadlines(sector, locale, tapeEnd, windowDays);
+  return stampResearch(
+    stored ?? emptyResearch(sector, weekStart, locale),
+    headlines.length ? headlines : (stored?.headlines ?? []),
+    locale,
+    weekStart,
+    weekEnd,
+    true,
+  );
 }
 
 export async function writeSectorDigest(
@@ -169,45 +240,45 @@ export async function writeSectorDigest(
   locale: Locale,
   date: string,
   force = false,
-  days = 3,
 ): Promise<SectorResearch> {
+  const { weekStart, weekEnd, tapeEnd, windowDays } = weekWindow(date);
   if (!force) {
-    const stored = await getIndustryDigest(sector, locale, date);
-    if (stored?.brief.length) {
-      const headlines = await collectSectorHeadlines(sector, locale, date, days);
-      return {
-        ...stored,
-        headlines: headlines.length ? headlines : stored.headlines,
-        fromDate: shiftIsoDate(date, -(days - 1)),
-        windowDays: days,
-      };
+    const stored = await getIndustryDigest(sector, locale, weekStart);
+    if (stored && hasDeskNote(stored)) {
+      const headlines = await collectSectorHeadlines(sector, locale, tapeEnd, windowDays);
+      return stampResearch(stored, headlines.length ? headlines : stored.headlines, locale, weekStart, weekEnd, false);
     }
   }
-  const headlines = await collectSectorHeadlines(sector, locale, date, days);
+  const headlines = await collectSectorHeadlines(sector, locale, tapeEnd, windowDays);
   const desk = await generateSectorDeskNote({
     sector,
     locale,
-    date,
+    date: weekStart,
+    weekEnd,
     headlines,
     watchlist: [...sectorSpec(sector).tickers],
   });
+  const merged = mergeDesk(desk, headlines, sector, locale);
   const payload: SectorResearch = {
     sector,
-    date,
+    date: weekStart,
     locale,
     headlines,
-    beneficiaries: parseNameCalls(desk.beneficiaries, sectorSpec(sector).tickers),
-    atRisk: parseNameCalls(desk.atRisk, sectorSpec(sector).tickers),
-    brief: desk.brief,
-    persisted: true,
+    beneficiaries: merged.beneficiaries,
+    atRisk: merged.atRisk,
+    brief: merged.brief,
+    persisted: false,
     live: false,
-    fromDate: shiftIsoDate(date, -(days - 1)),
-    windowDays: days,
+    fromDate: weekStart,
+    windowDays: 7,
   };
+  if (!headlines.length || !hasDeskNote(payload)) {
+    return payload;
+  }
   const written = await upsertIndustryDigest(payload);
-  return written ?? payload;
+  return written ?? { ...payload, persisted: true };
 }
 
 export async function listDigestDates(sector: IndustrySectorId, locale: Locale): Promise<string[]> {
-  return listIndustryDigestDates(sector, locale);
+  return digestWeekStarts(await listIndustryDigestDates(sector, locale));
 }

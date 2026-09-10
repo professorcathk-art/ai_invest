@@ -23,7 +23,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ccass_hkex import GAP_SEC, HkexCcassClient, build_hk_payload
 from ownership_us import build_us_payload, yahoo_session
 
+def public_origin() -> str:
+    api = os.getenv("INVESTMOUSE_API_URL", "").strip()
+    if "/api/" in api:
+        return api.split("/api/")[0].rstrip("/")
+    job = os.getenv("INVESTMOUSE_JOB_URL", "").strip().rstrip("/")
+    if job:
+        return job
+    site = os.getenv("INVESTMOUSE_SITE_URL", "").strip().rstrip("/")
+    if site and "127.0.0.1" not in site and "localhost" not in site:
+        return site
+    return "https://ai-invest-dvxh.vercel.app"
+
+
 API_URL = os.getenv("INVESTMOUSE_API_URL", "").strip()
+if not API_URL or "127.0.0.1" in API_URL or "localhost" in API_URL:
+    API_URL = f"{public_origin()}/api/ownership/ingest"
 INGEST_TOKEN = os.getenv("RESEARCH_INGEST_TOKEN", "")
 LIST_FILE = Path(__file__).resolve().parent / "ownership_tickers.txt"
 FAILED_FILE = Path(
@@ -153,10 +168,11 @@ def push_payload(payload: dict) -> int:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {INGEST_TOKEN}",
+            "User-Agent": "InvestMouse/1.0 (research; +https://investmouse.app)",
         },
         timeout=30,
     )
-    print(f"Ingest Status: {res.status_code}, Response: {res.text[:500]}")
+    print(f"Ingest dest={API_URL} Status: {res.status_code}, Response: {res.text[:500]}")
     return 0 if res.ok else 1
 
 

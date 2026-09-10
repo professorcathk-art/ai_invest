@@ -14,22 +14,22 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 
 UA = "InvestMouse/1.0 (research; +https://investmouse.app)"
 YC_CHANGES = "https://yc-oss.github.io/api/changes/latest.json"
 
 
 def site_url() -> str:
+    api = os.getenv("INVESTMOUSE_API_URL", "").strip()
+    if "/api/" in api:
+        return api.split("/api/")[0].rstrip("/")
+    job = os.getenv("INVESTMOUSE_JOB_URL", "").strip().rstrip("/")
+    if job:
+        return job
     explicit = os.getenv("INVESTMOUSE_SITE_URL", "").strip().rstrip("/")
-    if explicit:
+    if explicit and "127.0.0.1" not in explicit and "localhost" not in explicit:
         return explicit
-    ownership = os.getenv("INVESTMOUSE_API_URL", "").strip()
-    if ownership:
-        parsed = urlparse(ownership)
-        if parsed.scheme and parsed.netloc:
-            return f"{parsed.scheme}://{parsed.netloc}"
-    return "http://localhost:3030"
+    return "https://ai-invest-dvxh.vercel.app"
 
 
 def fetch(url: str, timeout: int = 22) -> bytes:

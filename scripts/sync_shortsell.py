@@ -16,7 +16,6 @@ import argparse
 import os
 import sys
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 
 import requests
 
@@ -33,21 +32,24 @@ FILES = (
 )
 
 
+def public_origin() -> str:
+    api = os.getenv("INVESTMOUSE_API_URL", "").strip()
+    if "/api/" in api:
+        return api.split("/api/")[0].rstrip("/")
+    job = os.getenv("INVESTMOUSE_JOB_URL", "").strip().rstrip("/")
+    if job:
+        return job
+    site = os.getenv("INVESTMOUSE_SITE_URL", "").strip().rstrip("/")
+    if site and "127.0.0.1" not in site and "localhost" not in site:
+        return site
+    return "https://ai-invest-dvxh.vercel.app"
+
+
 def ingest_url() -> str:
     explicit = os.getenv("INVESTMOUSE_SHORTSELL_URL", "").strip()
-    if explicit:
+    if explicit and "127.0.0.1" not in explicit and "localhost" not in explicit:
         return explicit
-    ownership = os.getenv("INVESTMOUSE_API_URL", "").strip()
-    if ownership and "/api/ownership/ingest" in ownership:
-        return ownership.replace("/api/ownership/ingest", "/api/short-selling/ingest")
-    site = os.getenv("INVESTMOUSE_SITE_URL", "").strip().rstrip("/")
-    if site:
-        return f"{site}/api/short-selling/ingest"
-    if ownership:
-        parsed = urlparse(ownership)
-        origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ownership.rstrip("/")
-        return f"{origin}/api/short-selling/ingest"
-    return ""
+    return f"{public_origin()}/api/short-selling/ingest"
 
 
 def fetch(url: str) -> str:
@@ -106,12 +108,14 @@ def main(argv: list[str]) -> int:
         print(f"DRY sources={len(sources)}")
         return 0
 
+    print(f"Ingest dest={dest}")
     res = requests.post(
         dest,
         json=payload,
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
+            "User-Agent": UA,
         },
         timeout=60,
     )

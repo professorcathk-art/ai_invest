@@ -3,6 +3,16 @@ export interface RssItem {
   publisher: string;
   url: string;
   publishedAt: string | null;
+  summary?: string;
+}
+
+function stripHtml(value: string): string {
+  return decodeXml(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function decodeXml(value: string): string {
@@ -34,12 +44,14 @@ export async function parseRss(url: string, publisher: string, limit = 12): Prom
           "",
       );
       const pub = decodeXml(block.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] ?? "");
+      const summary = stripHtml(block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i)?.[1] ?? "");
       if (!title) continue;
       items.push({
         title,
         publisher,
         url: link.trim(),
         publishedAt: pub ? new Date(pub).toISOString() : null,
+        summary: summary.slice(0, 800),
       });
     }
     return items.slice(0, limit);
@@ -67,4 +79,26 @@ export async function uniqueRss(packs: RssItem[][], limit = 16): Promise<RssItem
   }
   out.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
   return out.slice(0, limit);
+}
+
+export async function fetchPageSnippet(url: string): Promise<string> {
+  if (!url || /news\.google\.com/i.test(url)) return "";
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(3000),
+      headers: { "User-Agent": "InvestMouse/1.0 (research; +https://investmouse.app)" },
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+    return stripHtml(html).slice(0, 800);
+  } catch {
+    return "";
+  }
+}
+
+export async function enrichRssSnippets(items: RssItem[], limit = 6): Promise<RssItem[]> {
+  const need = items.filter((item) => !item.summary && item.url && !/news\.google\.com/i.test(item.url)).slice(0, limit);
+  const snippets = await Promise.all(need.map(async (item) => [item.url, await fetchPageSnippet(item.url)] as const));
+  const byUrl = new Map(snippets);
+  return items.map((item) => ({ ...item, summary: item.summary || byUrl.get(item.url) || "" }));
 }

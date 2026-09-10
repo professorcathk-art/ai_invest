@@ -12,13 +12,9 @@ if [[ -f "$ROOT/.env.local" ]]; then
   set +a
 fi
 
-if [[ -n "${INVESTMOUSE_SITE_URL:-}" ]]; then
-  SITE="$INVESTMOUSE_SITE_URL"
-elif [[ -n "${INVESTMOUSE_API_URL:-}" ]]; then
-  SITE="${INVESTMOUSE_API_URL%/api/*}"
-else
-  SITE="http://127.0.0.1:3030"
-fi
+# shellcheck disable=SC1091
+source "$ROOT/scripts/job_site.sh"
+SITE="$(investmouse_job_site)"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Warming ticker books via $SITE"
 
 tickers=(0700.HK 0005.HK 9988.HK 1810.HK 3690.HK NVDA AAPL MSFT TSLA 0388.HK)

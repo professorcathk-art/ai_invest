@@ -140,6 +140,53 @@ export function shiftIsoDate(iso: string, days: number): string {
   return utc.toISOString().slice(0, 10);
 }
 
+/** Hong Kong calendar week starts Monday. `as_of_date` for weekly digests is this Monday. */
+export function weekStartMonday(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const utc = new Date(Date.UTC(year!, (month ?? 1) - 1, day ?? 1));
+  const dow = utc.getUTCDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  return shiftIsoDate(iso, offset);
+}
+
+export function weekEndSunday(weekStart: string): string {
+  return shiftIsoDate(weekStartMonday(weekStart), 6);
+}
+
+export function tapeEndForWeek(weekStart: string, today = hktCalendarDate()): string {
+  const start = weekStartMonday(weekStart);
+  const end = weekEndSunday(start);
+  if (today < start) return start;
+  if (today > end) return end;
+  return today;
+}
+
+export function inclusiveDays(start: string, end: string): number {
+  const a = Date.parse(`${start}T00:00:00Z`);
+  const b = Date.parse(`${end}T00:00:00Z`);
+  return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+}
+
+export function digestWeekStarts(dates: string[], today = hktCalendarDate()): string[] {
+  const weeks = new Set(dates.filter(isIsoDate).map(weekStartMonday));
+  weeks.add(weekStartMonday(today));
+  weeks.add(shiftIsoDate(weekStartMonday(today), -7));
+  return [...weeks].sort((left, right) => right.localeCompare(left));
+}
+
+export function listingMarket(ticker: string): "US" | "HK" {
+  return /\.HK$/i.test(ticker) ? "HK" : "US";
+}
+
+export function groupNameCallsByMarket(rows: SectorNameCall[]): { market: "US" | "HK"; rows: SectorNameCall[] }[] {
+  const us = rows.filter((row) => listingMarket(row.ticker) === "US");
+  const hk = rows.filter((row) => listingMarket(row.ticker) === "HK");
+  return [
+    ...(us.length ? [{ market: "US" as const, rows: us }] : []),
+    ...(hk.length ? [{ market: "HK" as const, rows: hk }] : []),
+  ];
+}
+
 export function publishedDateHkt(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const parsed = new Date(iso);
@@ -236,20 +283,103 @@ export function classifyHeadline(title: string, locale: "en" | "zh"): { impact: 
   return { impact, lens };
 }
 
-export function parseNameCalls(value: unknown, allowed: readonly string[]): SectorNameCall[] {
+export function padHkTicker(raw: string): string {
+  const match = raw.trim().toUpperCase().match(/^(\d{1,5})\.HK$/);
+  if (!match) return raw.trim().toUpperCase();
+  return `${match[1]!.padStart(4, "0")}.HK`;
+}
+
+export function resolveWatchlistTicker(
+  raw: string,
+  allowed: readonly string[],
+  aliases?: Record<string, readonly string[]>,
+): string | null {
+  const allow = new Map(allowed.map((ticker) => [ticker.toUpperCase(), ticker]));
+  const padded = padHkTicker(raw);
+  if (allow.has(padded)) return allow.get(padded) ?? null;
+  const hay = raw.trim().toLowerCase().replace(/^\$/, "");
+  for (const ticker of allowed) {
+    if (ticker.toLowerCase() === hay) return ticker;
+    const names = aliases?.[ticker] ?? [];
+    if (names.some((alias) => alias.toLowerCase() === hay)) return ticker;
+  }
+  return null;
+}
+
+export function parseNameCalls(
+  value: unknown,
+  allowed: readonly string[],
+  aliases?: Record<string, readonly string[]>,
+): SectorNameCall[] {
   if (!Array.isArray(value)) return [];
-  const allow = new Set(allowed);
   const out: SectorNameCall[] = [];
   for (const row of value) {
     if (!row || typeof row !== "object") continue;
     const rec = row as Record<string, unknown>;
-    const ticker = String(rec.ticker ?? "").trim().toUpperCase();
+    const ticker = resolveWatchlistTicker(String(rec.ticker ?? ""), allowed, aliases);
     const reason = String(rec.reason ?? "").trim();
-    if (!allow.has(ticker) || !reason) continue;
+    if (!ticker || !reason) continue;
     if (out.some((item) => item.ticker === ticker)) continue;
     out.push({ ticker, reason });
   }
   return out.slice(0, 6);
+}
+
+function pushNameCall(out: SectorNameCall[], ticker: string, reason: string) {
+  if (!ticker || !reason) return;
+  if (out.some((row) => row.ticker === ticker)) return;
+  out.push({ ticker, reason });
+}
+
+/** Last-resort mapping when the model returns no names. Still sourced from the tape / sector keywords. */
+export function fallbackWatchlistCalls(
+  headlines: SectorHeadline[],
+  sector: IndustrySectorId,
+  locale: "en" | "zh",
+): { beneficiaries: SectorNameCall[]; atRisk: SectorNameCall[] } {
+  const helped: SectorNameCall[] = [];
+  const hurt: SectorNameCall[] = [];
+  const watch = new Set<string>([...sectorSpec(sector).tickers]);
+  for (const item of headlines) {
+    const tone = classifyHeadline(item.title, locale).impact;
+    const reason =
+      locale === "zh" ? `公開標題：${item.title.slice(0, 90)}` : `Sourced headline: ${item.title.slice(0, 90)}`;
+    for (const ticker of item.tickers) {
+      if (!watch.has(ticker)) continue;
+      if (tone === "at_risk") pushNameCall(hurt, ticker, reason);
+      else pushNameCall(helped, ticker, reason);
+    }
+  }
+  const tape = headlines.map((item) => item.title).join("\n");
+  const zh = locale === "zh";
+  if (!helped.length && !hurt.length) {
+    if (sector === "ai" && /export control|gpu|semiconductor|foundry|chip|晶片|半導體|出口管制|台積電/i.test(tape)) {
+      pushNameCall(helped, "NVDA", zh ? "本週晶片／算力新聞對GPU龍頭有方向性。" : "Chip / compute tape maps onto the GPU leader.");
+      pushNameCall(hurt, "TSM", zh ? "出口管制與地緣風險落在代工鏈。" : "Export-control / geo risk sits on the foundry chain.");
+      pushNameCall(helped, "0981.HK", zh ? "內地晶圓廠同屬半導體觀察名單。" : "Mainland foundry stays on the same semiconductor watchlist.");
+    }
+    if (sector === "consumer" && /oil|brent|crude|inflation|tariff|油價|原油|通脹|關稅/i.test(tape)) {
+      pushNameCall(helped, "COST", zh ? "油價與通脹新聞下，倉店零售屬防禦消費。" : "Oil / inflation tape favours the warehouse staple.");
+      pushNameCall(hurt, "NKE", zh ? "關稅與消費轉弱更傷可選零售。" : "Tariff / weaker demand pressure discretionary retail.");
+    }
+    if (sector === "ev" && /tariff|ev|battery|tesla|byd|關稅|電動車|電池/i.test(tape)) {
+      pushNameCall(hurt, "TSLA", zh ? "關稅與車價新聞對整車廠有方向性。" : "Tariff / auto tape maps onto the EV makers.");
+      pushNameCall(hurt, "1211.HK", zh ? "出口與關稅風險指向內地整車。" : "Export / tariff risk maps onto the HK-listed EV maker.");
+    }
+    if (sector === "biotech" && /fda|glp-1|drug|pharma|biotech|醫藥|新藥|生物科技/i.test(tape)) {
+      pushNameCall(helped, "LLY", zh ? "GLP-1／醫藥要聞仍指向美股龍頭。" : "GLP-1 / pharma tape still maps onto the US leaders.");
+      pushNameCall(helped, "NVO", zh ? "同業GLP-1格局仍是本週醫藥主軸。" : "The GLP-1 pair remains the core biotech watch.");
+    }
+    if (sector === "china-internet" && /china|tencent|alibaba|meituan|互聯網|騰訊|阿里|美團/i.test(tape)) {
+      pushNameCall(helped, "0700.HK", zh ? "中國互聯網要聞優先對照騰訊。" : "China-internet tape maps onto the HK internet names.");
+      pushNameCall(hurt, "9988.HK", zh ? "監管與消費新聞同時落在阿里。" : "Regulatory / consumer tape also sits on Alibaba.");
+    }
+  }
+  return { beneficiaries: helped.slice(0, 4), atRisk: hurt.slice(0, 4) };
+}
+
+export function hasDeskNote(row: Pick<SectorResearch, "brief" | "beneficiaries" | "atRisk">): boolean {
+  return row.brief.length > 0 || row.beneficiaries.length > 0 || row.atRisk.length > 0;
 }
 
 export function parseHeadlines(value: unknown): SectorHeadline[] {
@@ -306,18 +436,20 @@ export function hydrateResearch(row: {
   at_risk: unknown;
   brief: unknown;
 }): SectorResearch {
-  const watchlist = sectorSpec(row.sector).tickers;
+  const spec = sectorSpec(row.sector);
+  const weekStart = weekStartMonday(String(row.as_of_date).slice(0, 10));
+  const aliases = spec.aliases as Record<string, readonly string[]>;
   return {
     sector: row.sector,
-    date: String(row.as_of_date).slice(0, 10),
+    date: weekStart,
     locale: row.locale,
     headlines: parseHeadlines(row.headlines),
-    beneficiaries: parseNameCalls(row.beneficiaries, watchlist),
-    atRisk: parseNameCalls(row.at_risk, watchlist),
+    beneficiaries: parseNameCalls(row.beneficiaries, spec.tickers, aliases),
+    atRisk: parseNameCalls(row.at_risk, spec.tickers, aliases),
     brief: Array.isArray(row.brief) ? row.brief.map((item) => String(item).trim()).filter(Boolean).slice(0, 5) : [],
     persisted: true,
     live: false,
-    fromDate: String(row.as_of_date).slice(0, 10),
-    windowDays: 1,
+    fromDate: weekStart,
+    windowDays: 7,
   };
 }

@@ -17,26 +17,21 @@ if [[ -f "$ROOT/.env.local" ]]; then
   set +a
 fi
 
-if [[ -n "${INVESTMOUSE_SITE_URL:-}" ]]; then
-  SITE="$INVESTMOUSE_SITE_URL"
-elif [[ -n "${INVESTMOUSE_API_URL:-}" ]]; then
-  SITE="${INVESTMOUSE_API_URL%/api/*}"
-else
-  SITE="http://127.0.0.1:3030"
-fi
+# shellcheck disable=SC1091
+source "$ROOT/scripts/job_site.sh"
+
+SITE="$(investmouse_job_site)"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Warming public feeds via $SITE"
 
-curl -fsS -o /dev/null -w "industry-ai %{http_code}\n" "$SITE/api/industry-research?sector=ai&lang=en" || true
-curl -fsS -o /dev/null -w "industry-china %{http_code}\n" "$SITE/api/industry-research?sector=china-internet&lang=zh" || true
+curl -fsS -o /dev/null -w "industry-dates %{http_code}\n" "$SITE/api/industry-research?sector=ai&lang=en&dates=1" || true
+curl -fsS -o /dev/null -w "private-market %{http_code}\n" "$SITE/api/private-market" || true
 if [[ -n "${RESEARCH_INGEST_TOKEN:-}" ]]; then
   curl -fsS -o /dev/null -w "private-digest %{http_code}\n" \
     -X POST "$SITE/api/private-market/ingest" \
     -H "Authorization: Bearer $RESEARCH_INGEST_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{}" || true
-else
-  curl -fsS -o /dev/null -w "private-market %{http_code}\n" "$SITE/api/private-market" || true
 fi
 
 tmp="$(mktemp)"

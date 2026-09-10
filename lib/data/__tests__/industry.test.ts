@@ -9,9 +9,10 @@ import {
   mentionedTickers,
   parseNameCalls,
   publishedDateHkt,
+  resolveWatchlistTicker,
   toSectorHeadline,
 } from "../industry";
-import { hktCalendarDate, shiftIsoDate } from "../industry-sectors";
+import { groupNameCallsByMarket, hktCalendarDate, shiftIsoDate, weekEndSunday, weekStartMonday } from "../industry-sectors";
 
 describe("sector digest tape", () => {
   it("only hangs a ticker on a headline when the name is actually there", () => {
@@ -57,11 +58,28 @@ describe("sector digest tape", () => {
     expect(shiftIsoDate(hktCalendarDate(new Date("2026-09-09T02:00:00+08:00")), -1)).toBe("2026-09-08");
   });
 
-  it("keeps a three-day Hong Kong window and splits EN/ZH titles", () => {
-    expect(inDateWindow("2026-09-08T16:30:00Z", "2026-09-09", 3, false)).toBe(true);
-    expect(inDateWindow("2026-09-06T02:00:00Z", "2026-09-09", 3, false)).toBe(false);
+  it("keeps a Hong Kong week window and splits EN/ZH titles", () => {
+    expect(weekStartMonday("2026-09-10")).toBe("2026-09-07");
+    expect(weekEndSunday("2026-09-10")).toBe("2026-09-13");
+    expect(inDateWindow("2026-09-08T16:30:00Z", "2026-09-10", 4, false)).toBe(true);
+    expect(inDateWindow("2026-09-06T02:00:00Z", "2026-09-10", 4, false)).toBe(false);
     expect(headlineFitsLocale("U.S. military destroys five Iranian oil tankers", "en")).toBe(true);
     expect(headlineFitsLocale("美軍擊毀五艘伊朗油輪", "en")).toBe(false);
     expect(headlineFitsLocale("美軍擊毀五艘伊朗油輪", "zh")).toBe(true);
+  });
+
+  it("resolves watchlist aliases and groups US vs HK names", () => {
+    expect(resolveWatchlistTicker("Nvidia", ["NVDA", "0981.HK"], { NVDA: ["nvidia"], "0981.HK": ["smic"] })).toBe("NVDA");
+    expect(resolveWatchlistTicker("981.HK", ["0981.HK"])).toBe("0981.HK");
+    expect(parseNameCalls([{ ticker: "SMIC", reason: "Export-control tape" }], ["NVDA", "0981.HK"], { "0981.HK": ["smic"] })).toEqual([
+      { ticker: "0981.HK", reason: "Export-control tape" },
+    ]);
+    expect(groupNameCallsByMarket([
+      { ticker: "NVDA", reason: "GPU demand" },
+      { ticker: "0981.HK", reason: "Foundry" },
+    ])).toEqual([
+      { market: "US", rows: [{ ticker: "NVDA", reason: "GPU demand" }] },
+      { market: "HK", rows: [{ ticker: "0981.HK", reason: "Foundry" }] },
+    ]);
   });
 });

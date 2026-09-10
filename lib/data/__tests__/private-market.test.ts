@@ -5,6 +5,7 @@ import {
   extractRaiseSize,
   extractValuation,
   formatDealSize,
+  inferDealSector,
   isUsableCompanyName,
   mergeDealRows,
   parsePrivateDeals,
@@ -152,7 +153,12 @@ describe("private deal digest helpers", () => {
     expect(cleanCompanyName("Crusoe reportedly")).toBe("Crusoe");
     expect(isUsableCompanyName("Exclusive")).toBe(false);
     expect(isUsableCompanyName("French A.I. Start")).toBe(false);
-    expect(isUsableCompanyName("Mistral")).toBe(true);
+    expect(cleanCompanyName("Clay, an A.I. Sales Tool Provider,")).toBe("Clay");
+    expect(isUsableCompanyName("Peter Thiel")).toBe(false);
+    expect(inferDealSector("", "Supernus Pharmaceuticals")).toBe("Biotech");
+    expect(inferDealSector("", "PBCO Financial Corporation")).toBe("Financials");
+    expect(inferDealSector("", "Clay", "an A.I. sales tool provider raises $115M")).toBe("Artificial Intelligence");
+    expect(formatDealSize("$40,200")).toBe("");
   });
 
   it("collapses a reverse merger listed twice with swapped names", () => {

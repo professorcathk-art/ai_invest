@@ -7,6 +7,7 @@ import {
   cleanCompanyName,
   formatDealSize,
   isUsableCompanyName,
+  inferDealSector,
   extractRaiseSize,
   extractValuation,
   mergeDealRows,
@@ -51,11 +52,11 @@ export async function digestDealTape(headlines: RssItem[], structured: PrivateDe
     model: deepseek(process.env.DEEPSEEK_MODEL || "deepseek-v4-flash"),
     system: `You extract private-market / M&A deals from headlines.
 HARD RULES:
-- target MUST be a short company name only — never the full headline, never "Exclusive", never a truncated phrase like "French A.I. Start".
+- target MUST be a short company name only — never the full headline, never a person (Peter Thiel), never "Exclusive", never a truncated phrase like "French A.I. Start", never an appositive like "Clay, an A.I. Sales Tool Provider".
 - The same transaction mentioned by several headlines is ONE deal. Put every matching headline index in sourceIndexes.
-- acquirer, leadInvestors, sector, dealSize, valuation: copy from the text or leave "".
-- dealSize is capital raised (e.g. "raises $50M"). valuation is post-money (e.g. "at a $400M valuation"). Never swap them. Never invent a dollar amount.
-- Never invent a buyer, advisor, or dollar amount that is not in a headline.
+- Read title AND snippet. Infer sector even when the headline does not say "Fintech" / "Biotech". Allowed sectors: Artificial Intelligence, Biotech, Financials, Enterprise Software, Semiconductors, Electric Vehicles, Consumer, Energy, Telecom, Defense, Crypto, Industrials, Infrastructure.
+- acquirer, leadInvestors, dealSize, valuation: copy from the text or leave "". Never invent a buyer, advisor, or dollar amount.
+- dealSize is capital raised (e.g. "raises $50M"). valuation is post-money (e.g. "at a $400M valuation"). Never swap them. Ignore share prices.
 - dealType is Funding, Venture round, YC launch, M&A, or Merger.
 - announcedOn is YYYY-MM-DD when the headline date is known, else null.
 Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Artificial Intelligence","dealType":"Funding","dealSize":"$2B","valuation":"$10B","leadInvestors":"","announcedOn":"2026-09-08","sourceIndexes":[0,3] }] }`,
@@ -64,6 +65,7 @@ Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Art
         headlines: headlines.map((item, index) => ({
           i: index,
           title: item.title,
+          snippet: (item.summary ?? "").slice(0, 400),
           publisher: item.publisher,
           url: item.url,
           publishedAt: item.publishedAt,
@@ -90,15 +92,16 @@ Return ONLY JSON: { "deals": [{ "target":"Cognition","acquirer":"","sector":"Art
         .map((index) => headlines[index])
         .filter((item): item is RssItem => Boolean(item));
       if (!picked.length) continue;
+      const blob = picked.map((item) => `${item.title} ${item.summary ?? ""}`).join(" ");
       digested.push({
         id: `digest-${target}-${row.announcedOn ?? picked[0]?.publishedAt ?? ""}`,
         announcedOn: row.announcedOn ?? picked[0]?.publishedAt ?? null,
         target,
         acquirer: cleanCompanyName(row.acquirer),
-        sector: row.sector.trim(),
+        sector: inferDealSector(row.sector.trim(), target, row.acquirer, blob),
         dealType: row.dealType.trim() || "M&A",
-        dealSize: formatDealSize(row.dealSize) || extractRaiseSize(picked.map((item) => item.title).join(" ")),
-        valuation: formatDealSize(row.valuation) || extractValuation(picked.map((item) => item.title).join(" ")),
+        dealSize: formatDealSize(row.dealSize) || extractRaiseSize(blob),
+        valuation: formatDealSize(row.valuation) || extractValuation(blob),
         leadInvestors: row.leadInvestors.trim(),
         sources: mergeSources(
           picked.map((item) => ({ label: sourceLabel(item.url, item.publisher, item.title), url: item.url })),

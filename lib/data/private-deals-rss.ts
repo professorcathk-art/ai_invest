@@ -1,7 +1,7 @@
-import { googleNewsUrl, parseRss, uniqueRss, type RssItem } from "./rss";
+import { googleNewsUrl, parseRss, uniqueRss, enrichRssSnippets, type RssItem } from "./rss";
 import { sourceLabel } from "./deal-sources";
 import type { PrivateDeal } from "./private-market";
-import { cleanCompanyName, extractRaiseSize, extractValuation, isUsableCompanyName } from "./private-market";
+import { cleanCompanyName, extractRaiseSize, extractValuation, inferDealSector, isUsableCompanyName } from "./private-market";
 
 const DEAL_CORE =
   /\b(acquir\w*|merger|merges|merging|buyout|takeover|series [a-g]\b|seed round|private equity|lbo|spac)\b|收購|併購|融資|私募/;
@@ -34,8 +34,11 @@ export async function collectDealHeadlines(locale: "en" | "zh" = "en"): Promise<
     parseRss("https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "Reuters", 12),
     parseRss("https://www.ycombinator.com/blog/rss", "Y Combinator", 8),
   ]);
-  return (await uniqueRss([google, vc, techcrunch, crunchbase, reuters, ycBlog], 56)).filter((item) =>
-    isDealHeadline(item.title),
+  return enrichRssSnippets(
+    (await uniqueRss([google, vc, techcrunch, crunchbase, reuters, ycBlog], 56)).filter((item) =>
+      isDealHeadline(item.title),
+    ),
+    6,
   );
 }
 
@@ -79,7 +82,7 @@ export function dealFromHeadline(item: RssItem): PrivateDeal | null {
     announcedOn: item.publishedAt,
     target,
     acquirer: acquirer && acquirer !== target ? acquirer : "",
-    sector: "",
+    sector: inferDealSector("", target, acquirer, item.title, item.summary ?? ""),
     dealType,
     dealSize: extractRaiseSize(item.title),
     valuation: extractValuation(item.title),
